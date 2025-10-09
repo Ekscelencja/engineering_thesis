@@ -47,4 +47,4 @@ Thumbs.db
 
 # Ignore generated session files if desired
 /copilot_history/*-session.md
-!copilot_history/template.md
+copilot_history/template.md
