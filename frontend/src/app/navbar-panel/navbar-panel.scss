@@ -1,0 +1,66 @@
+
+.navbar-panel {
+	position: fixed;
+	top: 0;
+	left: 0;
+	height: 100vh;
+	background: #222;
+	color: #fff;
+	width: 220px;
+	transition: width 0.2s, left 0.2s;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	box-shadow: 2px 0 8px rgba(0,0,0,0.08);
+}
+
+.navbar-panel.hidden {
+	width: 0;
+	overflow: hidden;
+	left: -220px;
+}
+
+.navbar-panel .toggle-btn {
+	background: none;
+	border: none;
+	color: #fff;
+	font-size: 1.5rem;
+	margin: 1rem 0 1rem 1rem;
+	cursor: pointer;
+	align-self: flex-start;
+}
+
+.navbar-panel .nav-links {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	width: 100%;
+}
+
+.navbar-panel .nav-links li {
+	margin: 0.5rem 0;
+}
+
+.navbar-panel .nav-links a {
+	display: flex;
+	align-items: center;
+	color: #fff;
+	text-decoration: none;
+	padding: 0.75rem 1.5rem;
+	border-radius: 4px 0 0 4px;
+	transition: background 0.2s;
+}
+
+.navbar-panel .nav-links a.active, .navbar-panel .nav-links a:hover {
+	background: #444;
+}
+
+.navbar-panel .icon {
+	font-family: monospace;
+	font-size: 1.2rem;
+	margin-right: 1rem;
+}
+
+.navbar-panel .label {
+	font-size: 1rem;
+}

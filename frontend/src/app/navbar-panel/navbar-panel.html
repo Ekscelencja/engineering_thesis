@@ -1,0 +1,14 @@
+<nav class="navbar-panel" [class.expanded]="expanded()" [class.hidden]="!expanded()">
+	<button class="toggle-btn" (click)="toggle()" aria-label="Toggle navbar">
+		<span *ngIf="expanded(); else showIcon">⏴</span>
+		<ng-template #showIcon>☰</ng-template>
+	</button>
+	<ul class="nav-links">
+		<li *ngFor="let link of navLinks">
+			<a [routerLink]="link.route" routerLinkActive="active" [attr.aria-label]="link.label">
+				<span class="icon">{{ link.icon }}</span>
+				<span class="label" *ngIf="expanded()">{{ link.label }}</span>
+			</a>
+		</li>
+	</ul>
+</nav>
