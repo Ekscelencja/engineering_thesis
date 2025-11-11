@@ -10,7 +10,7 @@ import { CommonModule } from '@angular/common';
   styleUrls: ['./navbar-panel.scss']
 })
 export class NavbarPanel {
-  expanded = signal(true);
+  expanded = signal(false);
 
   navLinks = [
     { label: 'Dashboard', route: '/dashboard', icon: 'dashboard' },
