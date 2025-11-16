@@ -26,6 +26,9 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private controls!: OrbitControls;
   private ctrlPressed: boolean = false;
   private meshDrawingActive: boolean = false;
+  private allWallMeshes: THREE.Mesh[][] = [];
+  private wallHeight: number = 2.7
+  private wallThickness: number = 0.2;
   constructor(private ngZone: NgZone) { }
 
   ngAfterViewInit() {
@@ -270,8 +273,9 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     ));
 
     const geometry = new THREE.ShapeGeometry(shape);
+    const roomColor = Math.floor(Math.random() * 0xffffff);
     const material = new THREE.MeshStandardMaterial({
-      color: Math.floor(Math.random() * 0xffffff),
+      color: roomColor,
       side: THREE.DoubleSide,
       transparent: true,
       opacity: 0.75
@@ -282,6 +286,8 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     mesh.position.y = 0;
     this.scene.add(mesh);
     this.roomMeshes.push(mesh);
+
+    this.generateWallsForRoom(this.drawingVertices, roomColor);
   }
 
   private isNearFirstVertex(point: { x: number, z: number }, threshold: number = 0.3): boolean {
@@ -290,6 +296,37 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     const dx = point.x - first.x;
     const dz = point.z - first.z;
     return Math.sqrt(dx * dx + dz * dz) <= threshold;
+  }
+
+  private generateWallsForRoom(vertices: { x: number, z: number }[], roomColor: number) {
+    const currentRoomWalls: THREE.Mesh[] = [];
+  
+    for (let i = 0; i < vertices.length; i++) {
+      const startV = vertices[i];
+      const endV = vertices[(i + 1) % vertices.length];
+
+      //calculate wall parameters like lenght and angle
+      const dx = endV.x - startV.x;
+      const dz = endV.z - startV.z;
+      const length = Math.sqrt(dx * dx + dz * dz);
+      const angle = Math.atan2(dz, dx); 
+
+      //create wall geometry and mesh
+      const wallGeometry = new THREE.BoxGeometry(length, this.wallHeight, this.wallThickness);
+      const wallMaterial = new THREE.MeshStandardMaterial({ color: roomColor });
+      const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
+
+      //postioning of the wall: centered between start and end vertex, raised by half wall height
+      wallMesh.position.set(
+        (startV.x + endV.x) / 2,
+        this.wallHeight / 2,
+        (startV.z + endV.z) / 2
+      );
+      wallMesh.rotation.y = -angle; //rotate to align with start-end direction
+      this.scene.add(wallMesh);
+      currentRoomWalls.push(wallMesh);
+    }
+    this.allWallMeshes.push(currentRoomWalls);
   }
 
   private animate = () => {
