@@ -1,5 +1,6 @@
 import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, signal, NgZone } from '@angular/core';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/Addons.js';
 
 @Component({
   selector: 'app-three-canvas',
@@ -17,13 +18,15 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
 
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
-
-  private drawingVertices: THREE.Vector3[] = [];
-  private drawingLine?: THREE.Line;
-  private drawingPolygon?: THREE.Mesh;
-  private isDrawing = true;
-
-  constructor(private ngZone: NgZone) {}
+  private drawingVertices: { x: number, z: number }[] = [];
+  private isDrawing: boolean = false;
+  private drawingLine: THREE.Line | null = null;
+  private polygonMesh: THREE.Mesh | null = null;
+  private roomMeshes: THREE.Mesh[] = [];
+  private controls!: OrbitControls;
+  private ctrlPressed: boolean = false;
+  private meshDrawingActive: boolean = false;
+  constructor(private ngZone: NgZone) { }
 
   ngAfterViewInit() {
     this.initThree();
@@ -31,6 +34,9 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     // Attach mouse event listener for drawing
     this.ngZone.runOutsideAngular(() => {
       this.canvasRef.nativeElement.addEventListener('pointerdown', this.onPointerDown);
+      window.addEventListener('keydown', this.onKeyDown);
+      window.addEventListener('keyup', this.onKeyUp);
+      window.addEventListener('keypress', this.onKeyPress);
     });
   }
 
@@ -38,96 +44,53 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     if (this.animationId) cancelAnimationFrame(this.animationId);
     if (this.renderer) this.renderer.dispose();
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onPointerDown);
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('keypress', this.onKeyPress);
   }
-  // Handle pointer down event for drawing room polygon
-  private onPointerDown = (event: PointerEvent) => {
-    if (!this.isDrawing) return;
-    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-    this.mouse.set(x, y);
-    this.raycaster.setFromCamera(this.mouse, this.camera);
-    // Intersect with XZ plane (Y=0)
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const intersection = new THREE.Vector3();
-    this.raycaster.ray.intersectPlane(plane, intersection);
-    // Snap to nearest integer (meter grid)
-    intersection.x = Math.round(intersection.x);
-    intersection.z = Math.round(intersection.z);
-    intersection.y = 0;
-    // If first point, start new polygon
-    if (this.drawingVertices.length > 0 && intersection.distanceTo(this.drawingVertices[0]) < 0.5 && this.drawingVertices.length > 2) {
-      // Close polygon
-      this.finishPolygon();
-      this.isDrawing = false;
-      return;
+
+  private onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Control') {
+      this.ctrlPressed = true;
+      if (this.ctrlPressed) this.controls.enabled = true;
     }
-    this.drawingVertices.push(intersection.clone());
-    this.updateDrawingLine();
   };
 
-  // Reset drawing state (for future use)
-  public resetDrawing() {
-    this.isDrawing = true;
-    this.drawingVertices = [];
-    if (this.drawingLine) {
-      this.scene.remove(this.drawingLine);
-      this.drawingLine = undefined;
+  private onKeyUp = (event: KeyboardEvent) => {
+    if (event.key === 'Control') {
+      this.ctrlPressed = false;
+      if (!this.ctrlPressed) this.controls.enabled = false;
     }
-    if (this.drawingPolygon) {
-      this.scene.remove(this.drawingPolygon);
-      this.drawingPolygon = undefined;
-    }
-  }
+  };
 
-  // Draw lines between clicked points
-  private updateDrawingLine() {
-    if (this.drawingLine) {
-      this.scene.remove(this.drawingLine);
-    }
-    if (this.drawingVertices.length < 2) return;
-    const points = [...this.drawingVertices, this.drawingVertices[0]];
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ color: 0x00bfae, linewidth: 2 });
-    this.drawingLine = new THREE.Line(geometry, material);
-    this.scene.add(this.drawingLine);
-  }
-
-  // Fill the polygon when closed
-  private finishPolygon() {
-    if (this.drawingPolygon) {
-      this.scene.remove(this.drawingPolygon);
-    }
-    const shape = new THREE.Shape(this.drawingVertices.map(v => new THREE.Vector2(v.x, v.z)));
-    const geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshBasicMaterial({ color: 0x90caf9, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
-    this.drawingPolygon = new THREE.Mesh(geometry, material);
-    this.scene.add(this.drawingPolygon);
-    // Remove the drawing line
-    if (this.drawingLine) {
-      this.scene.remove(this.drawingLine);
-      this.drawingLine = undefined;
-    }
-    this.drawingVertices = [];
-  }
+  private onKeyPress = (event: KeyboardEvent) => {
+    if (event.key === 'd' || event.key === 'D') this.meshDrawingActive = !this.meshDrawingActive; 
+  };
 
   private initThree() {
     const width = this.canvasRef.nativeElement.clientWidth || 800;
     const height = this.canvasRef.nativeElement.clientHeight || 600;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-    this.camera.position.set(0, 5, 0);
-    this.camera.up.set(0, 0, 1);
+    this.camera.position.set(0, 15, 0);
     this.camera.lookAt(0, 0, 0);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvasRef.nativeElement, antialias: true });
     this.renderer.setSize(width, height);
     this.renderer.setClearColor(0xdedede);
 
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.05;
+    this.controls.screenSpacePanning = false;
+    this.controls.minDistance = 5;
+    this.controls.maxDistance = 50;
+    this.controls.maxPolarAngle = Math.PI / 2; // Limit to horizontal view
+
     // Grid: 1 unit = 1 meter, 20x20 meters
     const grid = new THREE.GridHelper(20, 20, 0x888888, 0xbbbbbb);
     (grid.material as THREE.Material).opacity = 0.8;
     (grid.material as THREE.Material).transparent = true;
-    //this.scene.add(grid);
+    this.scene.add(grid);
     const axesHelper = new THREE.AxesHelper(5);
     this.scene.add(axesHelper);
     // Axis labels (X, Z)
@@ -231,7 +194,106 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     return sprite;
   }
 
+  private getWorldXZFromPointer(event: PointerEvent): { x: number, z: number } | null {
+    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    this.raycaster.setFromCamera(mouse, this.camera);
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // XZ plane at Y=0
+    const intersection = new THREE.Vector3();
+    if (this.raycaster.ray.intersectPlane(plane, intersection)) {
+      // Optional: snap to grid (1 meter)
+      return {
+        x: Math.round(intersection.x),
+        z: Math.round(intersection.z)
+      };
+    }
+    return null;
+  }
+
+  // Handles pointer down events for drawing
+  private onPointerDown = (event: PointerEvent) => {
+    if (this.ctrlPressed || !this.meshDrawingActive) return;
+    
+    if (!this.isDrawing) {
+      this.isDrawing = true;
+      this.drawingVertices = [];
+
+      if(this.drawingLine) {
+        this.scene.remove(this.drawingLine);
+        this.drawingLine.geometry.dispose();
+        (this.drawingLine.material as THREE.Material).dispose();
+        this.drawingLine = null;
+      }
+    }
+    const point = this.getWorldXZFromPointer(event);
+    if (point) {
+      if (this.drawingVertices.length >= 3 && this.isNearFirstVertex(point)) {
+        this.closePolygon();
+        return;
+      }
+      this.drawingVertices.push(point);
+      console.log('drawingVertices:', this.drawingVertices);
+      this.updateDrawingLine();
+    }
+  };
+
+  private updateDrawingLine() {
+    if (this.drawingLine) {
+      this.scene.remove(this.drawingLine);
+      this.drawingLine.geometry.dispose();
+      (this.drawingLine.material as THREE.Material).dispose();
+      this.drawingLine = null;
+    }
+    if (this.drawingVertices.length < 2) return;
+
+    const points = this.drawingVertices.map(v => new THREE.Vector3(v.x, 0.01, v.z));
+    const geomerty = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+    this.drawingLine = new THREE.Line(geomerty, material);
+    this.scene.add(this.drawingLine);
+  }
+
+  private closePolygon() {
+    this.isDrawing = false;
+    if(this.drawingLine) {
+      this.scene.remove(this.drawingLine);
+      this.drawingLine.geometry.dispose();
+      (this.drawingLine.material as THREE.Material).dispose();
+      this.drawingLine = null;
+    }
+    
+    const shape = new THREE.Shape(
+      this.drawingVertices.map(v => new THREE.Vector2(v.x, -v.z)
+    ));
+
+    const geometry = new THREE.ShapeGeometry(shape);
+    const material = new THREE.MeshStandardMaterial({
+      color: Math.floor(Math.random() * 0xffffff),
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.75
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0;
+    this.scene.add(mesh);
+    this.roomMeshes.push(mesh);
+  }
+
+  private isNearFirstVertex(point: { x: number, z: number }, threshold: number = 0.3): boolean {
+    if (this.drawingVertices.length === 0) return false;
+    const first = this.drawingVertices[0];
+    const dx = point.x - first.x;
+    const dz = point.z - first.z;
+    return Math.sqrt(dx * dx + dz * dz) <= threshold;
+  }
+
   private animate = () => {
+    if (this.controls) this.controls.update();
     if (this.renderer && this.scene && this.camera) {
       this.renderer.render(this.scene, this.camera);
     }
