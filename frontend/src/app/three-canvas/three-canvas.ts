@@ -34,6 +34,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   ngAfterViewInit() {
     this.initThree();
     this.animate();
+    window.addEventListener('resize', this.onResize);
     // Attach mouse event listener for drawing
     this.ngZone.runOutsideAngular(() => {
       this.canvasRef.nativeElement.addEventListener('pointerdown', this.onPointerDown);
@@ -50,6 +51,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('keypress', this.onKeyPress);
+    window.removeEventListener('resize', this.onResize);
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
@@ -66,6 +68,14 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     }
   };
 
+  private onResize = () => {
+      const width = this.canvasRef.nativeElement.clientWidth || window.innerWidth;
+      const height = this.canvasRef.nativeElement.clientHeight || window.innerHeight;
+      this.renderer.setSize(width, height);
+      this.camera.aspect = width / height;
+      this.camera.updateProjectionMatrix();
+  }
+
   private onKeyPress = (event: KeyboardEvent) => {
     if (event.key === 'd' || event.key === 'D') this.meshDrawingActive = !this.meshDrawingActive; 
   };
@@ -75,7 +85,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     const height = this.canvasRef.nativeElement.clientHeight || 600;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-    this.camera.position.set(0, 15, 0);
+    this.camera.position.set(0, 35, 0);
     this.camera.lookAt(0, 0, 0);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvasRef.nativeElement, antialias: true });
     this.renderer.setSize(width, height);
@@ -89,8 +99,8 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     this.controls.maxDistance = 50;
     this.controls.maxPolarAngle = Math.PI / 2; // Limit to horizontal view
 
-    // Grid: 1 unit = 1 meter, 20x20 meters
-    const grid = new THREE.GridHelper(20, 20, 0x888888, 0xbbbbbb);
+    // Grid: 1 unit = 1 meter, 40x40 meters
+    const grid = new THREE.GridHelper(40, 40, 0x888888, 0xbbbbbb);
     (grid.material as THREE.Material).opacity = 0.8;
     (grid.material as THREE.Material).transparent = true;
     this.scene.add(grid);
