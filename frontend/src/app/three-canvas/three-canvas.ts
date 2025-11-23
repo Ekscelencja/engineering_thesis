@@ -26,14 +26,16 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private ctrlPressed: boolean = false;
   private meshDrawingActive: boolean = false;
   private allWallMeshes: THREE.Mesh[][] = [];
-  private wallHeight: number = 2.7
+  private wallHeight: number = 2.7;
   private wallThickness: number = 0.2;
   private selectedRoomMesh: THREE.Mesh | null = null;
   private editMode = false;
   private vertexHandles: THREE.Mesh[] = [];
   private editingRoomIndex: number | null = null;
   private draggingHandleIndex: number | null = null;
-  private roomVertices: { x: number, z: number }[][] = [];
+  // Shared vertex system
+  private globalVertices: { x: number, z: number }[] = [];
+  private roomVertexIndices: number[][] = []; // Each room: array of indices into globalVertices
 
   constructor(private ngZone: NgZone) { }
 
@@ -314,6 +316,18 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     this.scene.add(this.drawingLine);
   }
 
+  // Find or add a global vertex, return its index
+  private findOrAddGlobalVertex(v: { x: number, z: number }, threshold: number = 0.01): number {
+    for (let i = 0; i < this.globalVertices.length; i++) {
+      const gv = this.globalVertices[i];
+      if (Math.abs(gv.x - v.x) < threshold && Math.abs(gv.z - v.z) < threshold) {
+        return i;
+      }
+    }
+    this.globalVertices.push({ x: v.x, z: v.z });
+    return this.globalVertices.length - 1;
+  }
+
   private closePolygon() {
     this.isDrawing = false;
     if (this.drawingLine) {
@@ -323,7 +337,16 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       this.drawingLine = null;
     }
 
-    const shape = new THREE.Shape(this.drawingVertices.map(v => new THREE.Vector2(v.x, -v.z)));
+    // Build room as indices into globalVertices
+    const indices: number[] = [];
+    for (const v of this.drawingVertices) {
+      indices.push(this.findOrAddGlobalVertex(v));
+    }
+    this.roomVertexIndices.push(indices);
+
+    // Generate mesh from globalVertices and indices
+    const verts = indices.map(idx => this.globalVertices[idx]);
+    const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
     const geometry = new THREE.ShapeGeometry(shape);
     const roomColor = Math.floor(Math.random() * 0xffffff);
     const material = new THREE.MeshStandardMaterial({
@@ -339,10 +362,9 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     this.scene.add(mesh);
 
     this.roomMeshes.push(mesh);
-    this.roomVertices.push(this.drawingVertices.map(v => ({ ...v })));
 
     // Push walls for this new room
-    this.generateWallsForRoom(this.drawingVertices, roomColor);
+    this.generateWallsForRoom(verts, roomColor);
   }
 
   private isNearFirstVertex(point: { x: number, z: number }, threshold: number = 0.3): boolean {
@@ -426,7 +448,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     this.selectedRoomMesh.geometry.dispose();
     (this.selectedRoomMesh.material as THREE.Material).dispose();
     this.roomMeshes.splice(index, 1);
-    this.roomVertices.splice(index, 1);
+    this.roomVertexIndices.splice(index, 1);
 
     const wallMeshes = this.allWallMeshes[index];
     if (wallMeshes) {
@@ -453,9 +475,10 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     if (index === -1) return;
 
     this.editingRoomIndex = index;
-    // Use only the stored vertices for handles
-    const verts = this.roomVertices[this.editingRoomIndex!];
-    for (const v of verts) {
+    // Use globalVertices for handles
+    const indices = this.roomVertexIndices[this.editingRoomIndex!];
+    for (const idx of indices) {
+      const v = this.globalVertices[idx];
       const sphereGeometry = new THREE.SphereGeometry(0.35, 25, 25);
       const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
       const handle = new THREE.Mesh(sphereGeometry, sphereMaterial);
@@ -495,12 +518,18 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     if (!this.editMode || this.draggingHandleIndex === null) return;
     const point = this.getWorldXZFromPointer(event);
     if (point) {
-      const verts = this.roomVertices[this.editingRoomIndex!];
-      verts[this.draggingHandleIndex!] = { x: point.x, z: point.z };
+      // Update the global vertex
+      const indices = this.roomVertexIndices[this.editingRoomIndex!];
+      const globalIdx = indices[this.draggingHandleIndex!];
+      this.globalVertices[globalIdx] = { x: point.x, z: point.z };
       this.vertexHandles[this.draggingHandleIndex!].position.set(point.x, 0.1, point.z);
-      this.updateRoomMeshAndWalls(this.editingRoomIndex!);
+      // Update all rooms that use this global vertex
+      for (let roomIdx = 0; roomIdx < this.roomVertexIndices.length; roomIdx++) {
+        if (this.roomVertexIndices[roomIdx].includes(globalIdx)) {
+          this.updateRoomMeshAndWalls(roomIdx);
+        }
+      }
     }
-
   };
 
   private onHandlePointerUp = (event: PointerEvent) => {
@@ -518,7 +547,8 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
 
   private updateRoomMeshAndWalls(roomIndex: number) {
     const mesh = this.roomMeshes[roomIndex];
-    const verts = this.roomVertices[roomIndex];
+    const indices = this.roomVertexIndices[roomIndex];
+    const verts = indices.map(idx => this.globalVertices[idx]);
 
     // Rebuild geometry in XY and keep the same Mesh instance
     const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
@@ -530,11 +560,11 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0;
 
-    // Keep selection highlighting intact (no need to reassign selectedRoomMesh)
-
-    // Update handle positions
-    for (let i = 0; i < verts.length; i++) {
-      this.vertexHandles[i].position.set(verts[i].x, 0.1, verts[i].z);
+    // Update handle positions if this is the currently edited room
+    if (this.editingRoomIndex === roomIndex) {
+      for (let i = 0; i < verts.length; i++) {
+        this.vertexHandles[i].position.set(verts[i].x, 0.1, verts[i].z);
+      }
     }
 
     // Regenerate walls for this room at the same index
