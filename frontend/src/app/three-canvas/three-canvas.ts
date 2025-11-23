@@ -21,7 +21,6 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private drawingVertices: { x: number, z: number }[] = [];
   private isDrawing: boolean = false;
   private drawingLine: THREE.Line | null = null;
-  private polygonMesh: THREE.Mesh | null = null;
   private roomMeshes: THREE.Mesh[] = [];
   private controls!: OrbitControls;
   private ctrlPressed: boolean = false;
@@ -29,6 +28,13 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private allWallMeshes: THREE.Mesh[][] = [];
   private wallHeight: number = 2.7
   private wallThickness: number = 0.2;
+  private selectedRoomMesh: THREE.Mesh | null = null;
+  private editMode = false;
+  private vertexHandles: THREE.Mesh[] = [];
+  private editingRoomIndex: number | null = null;
+  private draggingHandleIndex: number | null = null;
+  private roomVertices: { x: number, z: number }[][] = [];
+
   constructor(private ngZone: NgZone) { }
 
   ngAfterViewInit() {
@@ -37,7 +43,9 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     window.addEventListener('resize', this.onResize);
     // Attach mouse event listener for drawing
     this.ngZone.runOutsideAngular(() => {
-      this.canvasRef.nativeElement.addEventListener('pointerdown', this.onPointerDown);
+      this.setCanvasListeners();
+      window.addEventListener('pointermove', this.onHandlePointerMove);
+      window.addEventListener('pointerup', this.onHandlePointerUp);
       window.addEventListener('keydown', this.onKeyDown);
       window.addEventListener('keyup', this.onKeyUp);
       window.addEventListener('keypress', this.onKeyPress);
@@ -47,7 +55,9 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy() {
     if (this.animationId) cancelAnimationFrame(this.animationId);
     if (this.renderer) this.renderer.dispose();
-    this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onPointerDown);
+    this.deleteCanvasListeners();
+    window.removeEventListener('pointermove', this.onHandlePointerMove);
+    window.removeEventListener('pointerup', this.onHandlePointerUp);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('keypress', this.onKeyPress);
@@ -59,6 +69,9 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       this.ctrlPressed = true;
       if (this.ctrlPressed) this.controls.enabled = true;
     }
+    if (event.key === 'Delete') {
+      this.deleteSelectedRoom();
+    }
   };
 
   private onKeyUp = (event: KeyboardEvent) => {
@@ -69,16 +82,49 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   };
 
   private onResize = () => {
-      const width = this.canvasRef.nativeElement.clientWidth || window.innerWidth;
-      const height = this.canvasRef.nativeElement.clientHeight || window.innerHeight;
-      this.renderer.setSize(width, height);
-      this.camera.aspect = width / height;
-      this.camera.updateProjectionMatrix();
+    const width = this.canvasRef.nativeElement.clientWidth || window.innerWidth;
+    const height = this.canvasRef.nativeElement.clientHeight || window.innerHeight;
+    this.renderer.setSize(width, height);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
   }
 
   private onKeyPress = (event: KeyboardEvent) => {
-    if (event.key === 'd' || event.key === 'D') this.meshDrawingActive = !this.meshDrawingActive; 
+    if (event.key === 'd' || event.key === 'D') {
+      this.meshDrawingActive = !this.meshDrawingActive;
+      this.setCanvasListeners();
+    }
+    if (event.key === 'e' || event.key === 'E') {
+      this.editMode = !this.editMode;
+      console.log('Edit mode:', this.editMode);
+      this.setCanvasListeners(); // <-- add this line
+      if (this.editMode && this.selectedRoomMesh) {
+        this.showVertexHandles();
+      } else {
+        this.hideVertexHandles();
+      }
+    }
   };
+
+  private setCanvasListeners() {
+    this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onRoomSelect);
+    this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onHandlePointerDown);
+
+    if (this.editMode) {
+      this.canvasRef.nativeElement.addEventListener('pointerdown', this.onHandlePointerDown);
+    } else if (this.meshDrawingActive) {
+      this.canvasRef.nativeElement.addEventListener('pointerdown', this.onPointerDown);
+    } else {
+      this.canvasRef.nativeElement.addEventListener('pointerdown', this.onRoomSelect);
+    }
+  }
+
+  private deleteCanvasListeners() {
+    this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onRoomSelect);
+    this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onHandlePointerDown);
+  }
 
   private initThree() {
     const width = this.canvasRef.nativeElement.clientWidth || 800;
@@ -229,12 +275,12 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   // Handles pointer down events for drawing
   private onPointerDown = (event: PointerEvent) => {
     if (this.ctrlPressed || !this.meshDrawingActive) return;
-    
+
     if (!this.isDrawing) {
       this.isDrawing = true;
       this.drawingVertices = [];
 
-      if(this.drawingLine) {
+      if (this.drawingLine) {
         this.scene.remove(this.drawingLine);
         this.drawingLine.geometry.dispose();
         (this.drawingLine.material as THREE.Material).dispose();
@@ -248,7 +294,6 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
         return;
       }
       this.drawingVertices.push(point);
-      console.log('drawingVertices:', this.drawingVertices);
       this.updateDrawingLine();
     }
   };
@@ -271,17 +316,14 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
 
   private closePolygon() {
     this.isDrawing = false;
-    if(this.drawingLine) {
+    if (this.drawingLine) {
       this.scene.remove(this.drawingLine);
       this.drawingLine.geometry.dispose();
       (this.drawingLine.material as THREE.Material).dispose();
       this.drawingLine = null;
     }
-    
-    const shape = new THREE.Shape(
-      this.drawingVertices.map(v => new THREE.Vector2(v.x, -v.z)
-    ));
 
+    const shape = new THREE.Shape(this.drawingVertices.map(v => new THREE.Vector2(v.x, -v.z)));
     const geometry = new THREE.ShapeGeometry(shape);
     const roomColor = Math.floor(Math.random() * 0xffffff);
     const material = new THREE.MeshStandardMaterial({
@@ -295,8 +337,11 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0;
     this.scene.add(mesh);
-    this.roomMeshes.push(mesh);
 
+    this.roomMeshes.push(mesh);
+    this.roomVertices.push(this.drawingVertices.map(v => ({ ...v })));
+
+    // Push walls for this new room
     this.generateWallsForRoom(this.drawingVertices, roomColor);
   }
 
@@ -308,35 +353,159 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     return Math.sqrt(dx * dx + dz * dz) <= threshold;
   }
 
-  private generateWallsForRoom(vertices: { x: number, z: number }[], roomColor: number) {
+  private generateWallsForRoom(
+    vertices: { x: number, z: number }[],
+    roomColor: number,
+    overrideIndex?: number
+  ) {
     const currentRoomWalls: THREE.Mesh[] = [];
-  
+
     for (let i = 0; i < vertices.length; i++) {
       const startV = vertices[i];
       const endV = vertices[(i + 1) % vertices.length];
 
-      //calculate wall parameters like lenght and angle
       const dx = endV.x - startV.x;
       const dz = endV.z - startV.z;
       const length = Math.sqrt(dx * dx + dz * dz);
-      const angle = Math.atan2(dz, dx); 
+      const angle = Math.atan2(dz, dx);
 
-      //create wall geometry and mesh
       const wallGeometry = new THREE.BoxGeometry(length, this.wallHeight, this.wallThickness);
       const wallMaterial = new THREE.MeshStandardMaterial({ color: roomColor });
       const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
 
-      //postioning of the wall: centered between start and end vertex, raised by half wall height
       wallMesh.position.set(
         (startV.x + endV.x) / 2,
         this.wallHeight / 2,
         (startV.z + endV.z) / 2
       );
-      wallMesh.rotation.y = -angle; //rotate to align with start-end direction
+      wallMesh.rotation.y = -angle;
+
       this.scene.add(wallMesh);
       currentRoomWalls.push(wallMesh);
     }
-    this.allWallMeshes.push(currentRoomWalls);
+
+    if (overrideIndex !== undefined) {
+      this.allWallMeshes[overrideIndex] = currentRoomWalls;
+    } else {
+      this.allWallMeshes.push(currentRoomWalls);
+    }
+  }
+
+  private onRoomSelect = (event: PointerEvent) => {
+    if (this.ctrlPressed || this.meshDrawingActive) return;
+
+    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    )
+    this.raycaster.setFromCamera(mouse, this.camera);
+
+    const intersects = this.raycaster.intersectObjects(this.roomMeshes);
+    if (intersects.length > 0) {
+      if (this.selectedRoomMesh) {
+        (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+      }
+      this.selectedRoomMesh = intersects[0].object as THREE.Mesh;
+      (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0xffff00);
+    } else {
+      if (this.selectedRoomMesh) {
+        (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+        this.selectedRoomMesh = null;
+      }
+    }
+  }
+
+  private deleteSelectedRoom() {
+    if (!this.selectedRoomMesh) return;
+
+    const index = this.roomMeshes.indexOf(this.selectedRoomMesh!);
+    if (index === -1) return;
+
+    this.scene.remove(this.selectedRoomMesh);
+    this.selectedRoomMesh.geometry.dispose();
+    (this.selectedRoomMesh.material as THREE.Material).dispose();
+    this.roomMeshes.splice(index, 1);
+    this.roomVertices.splice(index, 1);
+
+    const wallMeshes = this.allWallMeshes[index];
+    if (wallMeshes) {
+      for (const wallMesh of wallMeshes) {
+        this.scene.remove(wallMesh);
+        wallMesh.geometry.dispose();
+        (wallMesh.material as THREE.Material).dispose();
+      }
+      this.allWallMeshes.splice(index, 1);
+    }
+    this.selectedRoomMesh = null;
+  }
+
+  private showVertexHandles() {
+    // Remove any existing handles
+    for (const handle of this.vertexHandles) {
+      this.scene.remove(handle);
+      handle.geometry.dispose();
+      (handle.material as THREE.Material).dispose();
+    }
+    this.vertexHandles = [];
+
+    const index = this.roomMeshes.indexOf(this.selectedRoomMesh!);
+    if (index === -1) return;
+
+    this.editingRoomIndex = index;
+    // Use only the stored vertices for handles
+    const verts = this.roomVertices[this.editingRoomIndex!];
+    for (const v of verts) {
+      const sphereGeometry = new THREE.SphereGeometry(0.35, 25, 25);
+      const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+      const handle = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      handle.position.set(v.x, 0.1, v.z);
+      this.scene.add(handle);
+      this.vertexHandles.push(handle);
+    }
+  }
+
+  private hideVertexHandles() {
+    for (const handle of this.vertexHandles) {
+      this.scene.remove(handle);
+      handle.geometry.dispose();
+      (handle.material as THREE.Material).dispose();
+    }
+    this.vertexHandles = [];
+    this.editingRoomIndex = null;
+  }
+
+  private onHandlePointerDown = (event: PointerEvent) => {
+    if (!this.editMode) return;
+    const rect = this.canvasRef.nativeElement.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    this.raycaster.setFromCamera(mouse, this.camera);
+    const intersects = this.raycaster.intersectObjects(this.vertexHandles);
+    if (intersects.length > 0) {
+      this.draggingHandleIndex = this.vertexHandles.indexOf(intersects[0].object as THREE.Mesh);
+      event.preventDefault();
+      event.stopPropagation(); // avoid any other pointerdown listeners
+    }
+  };
+
+  private onHandlePointerMove = (event: PointerEvent) => {
+    if (!this.editMode || this.draggingHandleIndex === null) return;
+    const point = this.getWorldXZFromPointer(event);
+    if (point) {
+      const verts = this.roomVertices[this.editingRoomIndex!];
+      verts[this.draggingHandleIndex!] = { x: point.x, z: point.z };
+      this.vertexHandles[this.draggingHandleIndex!].position.set(point.x, 0.1, point.z);
+      this.updateRoomMeshAndWalls(this.editingRoomIndex!);
+    }
+
+  };
+
+  private onHandlePointerUp = (event: PointerEvent) => {
+    if (!this.editMode) return;
+    this.draggingHandleIndex = null;
   }
 
   private animate = () => {
@@ -346,4 +515,38 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     }
     this.animationId = requestAnimationFrame(this.animate);
   };
+
+  private updateRoomMeshAndWalls(roomIndex: number) {
+    const mesh = this.roomMeshes[roomIndex];
+    const verts = this.roomVertices[roomIndex];
+
+    // Rebuild geometry in XY and keep the same Mesh instance
+    const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
+    const newGeometry = new THREE.ShapeGeometry(shape);
+
+    // Update geometry in place (prevents duplicate meshes)
+    if (mesh.geometry) mesh.geometry.dispose();
+    mesh.geometry = newGeometry;
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0;
+
+    // Keep selection highlighting intact (no need to reassign selectedRoomMesh)
+
+    // Update handle positions
+    for (let i = 0; i < verts.length; i++) {
+      this.vertexHandles[i].position.set(verts[i].x, 0.1, verts[i].z);
+    }
+
+    // Regenerate walls for this room at the same index
+    const oldWalls = this.allWallMeshes[roomIndex] ?? [];
+    for (const wall of oldWalls) {
+      this.scene.remove(wall);
+      wall.geometry.dispose();
+      (wall.material as THREE.Material).dispose();
+    }
+    this.allWallMeshes[roomIndex] = [];
+
+    const roomColor = (mesh.material as THREE.MeshStandardMaterial).color.getHex();
+    this.generateWallsForRoom(verts, roomColor, roomIndex);
+  }
 }
