@@ -1,0 +1,17 @@
+<div class="auth-container">
+  <h2>{{ isLogin() ? 'Login' : 'Register' }}</h2>
+  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+    <input formControlName="email" placeholder="Email" type="email" required />
+    <input formControlName="password" placeholder="Password" type="password" required />
+    <ng-container *ngIf="!isLogin()">
+      <input formControlName="name" placeholder="Name" type="text" required />
+      <select formControlName="role">
+        <option value="architect">Architect</option>
+        <option value="client">Client</option>
+      </select>
+    </ng-container>
+    <button type="submit">{{ isLogin() ? 'Login' : 'Register' }}</button>
+  </form>
+  <button (click)="toggleMode()">Switch to {{ isLogin() ? 'Register' : 'Login' }}</button>
+  <div *ngIf="error()" class="error">{{ error() }}</div>
+</div>

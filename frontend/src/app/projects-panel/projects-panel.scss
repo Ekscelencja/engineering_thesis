@@ -1,0 +1,13 @@
+:root{
+  height: 100%;
+}
+
+.projects-panel {
+  padding: 2rem;
+  height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}

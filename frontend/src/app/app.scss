@@ -1,0 +1,13 @@
+@use 'material-palette' as palette;
+
+.main-content {
+	min-height: 100vh;
+	background: palette.$gray-800;
+}
+
+@media (max-width: 600px) {
+	.main-content {
+		margin-left: 0;
+		padding: 1rem;
+	}
+}
