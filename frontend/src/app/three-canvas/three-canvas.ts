@@ -1,4 +1,13 @@
-import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, signal, NgZone } from '@angular/core';
+import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, signal, NgZone, ChangeDetectorRef } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+// Room metadata interface
+interface RoomMetadata {
+  name: string;
+  type: string;
+  area: number;
+}
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
 
@@ -6,7 +15,8 @@ import { OrbitControls } from 'three/examples/jsm/Addons.js';
   selector: 'app-three-canvas',
   standalone: true,
   templateUrl: './three-canvas.html',
-  styleUrls: ['./three-canvas.scss']
+  styleUrls: ['./three-canvas.scss'],
+  imports: [CommonModule, FormsModule]
 })
 export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
@@ -22,13 +32,20 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private isDrawing: boolean = false;
   private drawingLine: THREE.Line | null = null;
   private roomMeshes: THREE.Mesh[] = [];
+  public roomMetadata: RoomMetadata[] = [];
+  // Returns the index of the currently selected room, or -1 if none
+  public get selectedRoomIndex(): number {
+    const idx = this.selectedRoomMesh ? this.roomMeshes.indexOf(this.selectedRoomMesh) : -1;
+    console.log('[DEBUG] selectedRoomIndex:', idx);
+    return idx;
+  }
   private controls!: OrbitControls;
   private ctrlPressed: boolean = false;
   private meshDrawingActive: boolean = false;
   private allWallMeshes: THREE.Mesh[][] = [];
   private wallHeight: number = 2.7;
   private wallThickness: number = 0.2;
-  private selectedRoomMesh: THREE.Mesh | null = null;
+  public selectedRoomMesh: THREE.Mesh | null = null;
   private editMode = false;
   private vertexHandles: THREE.Mesh[] = [];
   private editingRoomIndex: number | null = null;
@@ -37,7 +54,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private globalVertices: { x: number, z: number }[] = [];
   private roomVertexIndices: number[][] = []; // Each room: array of indices into globalVertices
 
-  constructor(private ngZone: NgZone) { }
+  constructor(private ngZone: NgZone, private cdr: ChangeDetectorRef) { }
 
   ngAfterViewInit() {
     this.initThree();
@@ -329,6 +346,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   private closePolygon() {
+    console.log('[DEBUG] closePolygon called');
     this.isDrawing = false;
     if (this.drawingLine) {
       this.scene.remove(this.drawingLine);
@@ -362,9 +380,34 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     this.scene.add(mesh);
 
     this.roomMeshes.push(mesh);
+    console.log('[DEBUG] Room meshes count:', this.roomMeshes.length);
+
+    // Add default metadata for the new room
+    const area = this.calculatePolygonArea(verts);
+    this.roomMetadata.push({
+      name: `Room ${this.roomMeshes.length}`,
+      type: 'Generic',
+      area
+    });
+    console.log('[DEBUG] Room metadata count:', this.roomMetadata.length, this.roomMetadata);
 
     // Push walls for this new room
     this.generateWallsForRoom(verts, roomColor);
+
+    // Re-enable selection after drawing
+    this.setCanvasListeners();
+    console.log('[DEBUG] setCanvasListeners called after closePolygon');
+  }
+  // Shoelace formula for area of polygon (XZ plane)
+  private calculatePolygonArea(vertices: { x: number, z: number }[]): number {
+    let area = 0;
+    const n = vertices.length;
+    for (let i = 0; i < n; i++) {
+      const v1 = vertices[i];
+      const v2 = vertices[(i + 1) % n];
+      area += v1.x * v2.z - v2.x * v1.z;
+    }
+    return Math.abs(area) / 2;
   }
 
   private isNearFirstVertex(point: { x: number, z: number }, threshold: number = 0.3): boolean {
@@ -414,31 +457,38 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   private onRoomSelect = (event: PointerEvent) => {
+    console.log('[DEBUG] onRoomSelect fired');
     if (this.ctrlPressed || this.meshDrawingActive) return;
 
     const rect = this.canvasRef.nativeElement.getBoundingClientRect();
     const mouse = new THREE.Vector2(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
-    )
+    );
     this.raycaster.setFromCamera(mouse, this.camera);
 
     const intersects = this.raycaster.intersectObjects(this.roomMeshes);
-    if (intersects.length > 0) {
-      if (this.selectedRoomMesh) {
-        (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+    this.ngZone.run(() => {
+      if (intersects.length > 0) {
+        if (this.selectedRoomMesh) {
+          (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+        }
+        this.selectedRoomMesh = intersects[0].object as THREE.Mesh;
+        console.log('[DEBUG] Room selected:', this.selectedRoomMesh, 'Index:', this.selectedRoomIndex);
+        (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0xffff00);
+      } else {
+        if (this.selectedRoomMesh) {
+          (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+          this.selectedRoomMesh = null;
+        }
+        console.log('[DEBUG] No room selected');
       }
-      this.selectedRoomMesh = intersects[0].object as THREE.Mesh;
-      (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0xffff00);
-    } else {
-      if (this.selectedRoomMesh) {
-        (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
-        this.selectedRoomMesh = null;
-      }
-    }
+      this.cdr.detectChanges();
+    });
   }
 
   private deleteSelectedRoom() {
+    console.log('[DEBUG] deleteSelectedRoom called');
     if (!this.selectedRoomMesh) return;
 
     const index = this.roomMeshes.indexOf(this.selectedRoomMesh!);
@@ -449,6 +499,10 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     (this.selectedRoomMesh.material as THREE.Material).dispose();
     this.roomMeshes.splice(index, 1);
     this.roomVertexIndices.splice(index, 1);
+    console.log('[DEBUG] Room deleted. Meshes:', this.roomMeshes.length, 'Metadata:', this.roomMetadata.length);
+
+    // Remove metadata for the deleted room
+    this.roomMetadata.splice(index, 1);
 
     const wallMeshes = this.allWallMeshes[index];
     if (wallMeshes) {
@@ -578,5 +632,8 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
 
     const roomColor = (mesh.material as THREE.MeshStandardMaterial).color.getHex();
     this.generateWallsForRoom(verts, roomColor, roomIndex);
+
+    // Update area in metadata
+    this.roomMetadata[roomIndex].area = this.calculatePolygonArea(verts);
   }
 }
