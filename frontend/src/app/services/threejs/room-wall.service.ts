@@ -8,19 +8,6 @@ export class RoomWallService {
   wallHeight = 2.7;
   wallThickness = 0.2;
 
-  // Shoelace formula for area of polygon (XZ plane)
-  calculatePolygonArea(vertices: { x: number, z: number }[]): number {
-    let area = 0;
-    const n = vertices.length;
-    for (let i = 0; i < n; i++) {
-      const v1 = vertices[i];
-      const v2 = vertices[(i + 1) % n];
-      area += v1.x * v2.z - v2.x * v1.z;
-    }
-    console.log('Calculated polygon area:', Math.abs(area) / 2);
-    return Math.abs(area) / 2;
-  }
-
   // Generate wall meshes for a room
   generateWallsForRoom(
     scene: THREE.Scene,

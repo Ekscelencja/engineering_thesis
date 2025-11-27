@@ -1,19 +1,12 @@
 import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, signal, NgZone, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import * as THREE from 'three';
+import { EditorStateService } from '../services/threejs/editor-state.service';
 import { ProjectService, ProjectData } from '../services/api/project.service';
 import { ThreeRenderService } from '../services/threejs/three-render.service';
 import { RoomWallService } from '../services/threejs/room-wall.service';
-
-// Room metadata interface
-interface RoomMetadata {
-  name: string;
-  type: string;
-  area: number;
-}
-
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/Addons.js';
+import { calculatePolygonArea, isNearFirstVertex } from '../utils/geometry-utils';
 
 @Component({
   selector: 'app-editor',
@@ -26,39 +19,20 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
 
   private raycaster = new THREE.Raycaster();
-  private mouse = new THREE.Vector2();
-  private drawingVertexMeshes: THREE.Mesh[] = [];
-  private drawingVertices: { x: number, z: number }[] = [];
-  private isDrawing: boolean = false;
-  private drawingLine: THREE.Line | null = null;
-  private roomMeshes: THREE.Mesh[] = [];
-  public roomMetadata: RoomMetadata[] = [];
   // Returns the index of the currently selected room, or -1 if none
   public get selectedRoomIndex(): number {
-    const idx = this.selectedRoomMesh ? this.roomMeshes.indexOf(this.selectedRoomMesh) : -1;
+    const idx = this.editorStateService.selectedRoomMesh ? this.editorStateService.roomMeshes.indexOf(this.editorStateService.selectedRoomMesh) : -1;
     console.log('[DEBUG] selectedRoomIndex:', idx);
     return idx;
   }
-  private ctrlPressed: boolean = false;
-  private meshDrawingActive: boolean = false;
-  private allWallMeshes: THREE.Mesh[][] = [];
-  private wallHeight: number = 2.7;
-  private wallThickness: number = 0.2;
-  public selectedRoomMesh: THREE.Mesh | null = null;
-  private editMode = false;
-  private vertexHandles: THREE.Mesh[] = [];
-  private editingRoomIndex: number | null = null;
-  private draggingHandleIndex: number | null = null;
-  // Shared vertex system
-  private globalVertices: { x: number, z: number }[] = [];
-  private roomVertexIndices: number[][] = []; // Each room: array of indices into globalVertices
 
   constructor(
     private ngZone: NgZone,
     private cdr: ChangeDetectorRef,
-    private projectService: ProjectService,
+    private editorStateService: EditorStateService,
     public threeRenderService: ThreeRenderService,
-    private roomWallService: RoomWallService
+    private roomWallService: RoomWallService,
+    private projectService: ProjectService,
   ) { }
 
   ngAfterViewInit() {
@@ -90,8 +64,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Control') {
-      this.ctrlPressed = true;
-      if (this.ctrlPressed) this.threeRenderService.controls.enabled = true;
+      this.editorStateService.ctrlPressed = true;
+      if (this.editorStateService.ctrlPressed) this.threeRenderService.controls.enabled = true;
     }
     if (event.key === 'Delete') {
       this.deleteSelectedRoom();
@@ -100,33 +74,33 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   private onKeyUp = (event: KeyboardEvent) => {
     if (event.key === 'Control') {
-      this.ctrlPressed = false;
-      if (!this.ctrlPressed) this.threeRenderService.controls.enabled = false;
+      this.editorStateService.ctrlPressed = false;
+      if (!this.editorStateService.ctrlPressed) this.threeRenderService.controls.enabled = false;
     }
   };
 
   private onKeyPress = (event: KeyboardEvent) => {
     if (event.key === 'd' || event.key === 'D') {
-      this.meshDrawingActive = !this.meshDrawingActive;
+      this.editorStateService.meshDrawingActive = !this.editorStateService.meshDrawingActive;
       this.setCanvasListeners();
-      if (!this.meshDrawingActive) {
+      if (!this.editorStateService.meshDrawingActive) {
         // Remove unfinished drawing line and vertex highlights
-        if (this.drawingLine) {
-          this.threeRenderService.scene.remove(this.drawingLine);
-          this.drawingLine.geometry.dispose();
-          (this.drawingLine.material as THREE.Material).dispose();
-          this.drawingLine = null;
+        if (this.editorStateService.drawingLine) {
+          this.threeRenderService.scene.remove(this.editorStateService.drawingLine);
+          this.editorStateService.drawingLine.geometry.dispose();
+          (this.editorStateService.drawingLine.material as THREE.Material).dispose();
+          this.editorStateService.drawingLine = null;
         }
         this.clearDrawingVertexHighlights();
-        this.isDrawing = false;
-        this.drawingVertices = [];
+        this.editorStateService.isDrawing = false;
+        this.editorStateService.drawingVertices = [];
       }
     }
     if (event.key === 'e' || event.key === 'E') {
-      this.editMode = !this.editMode;
-      console.log('Edit mode:', this.editMode);
+      this.editorStateService.editMode = !this.editorStateService.editMode;
+      console.log('Edit mode:', this.editorStateService.editMode);
       this.setCanvasListeners();
-      if (this.editMode && this.selectedRoomMesh) {
+      if (this.editorStateService.editMode && this.editorStateService.selectedRoomMesh) {
         this.showVertexHandles();
       } else {
         this.hideVertexHandles();
@@ -139,9 +113,9 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onRoomSelect);
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onHandlePointerDown);
 
-    if (this.editMode) {
+    if (this.editorStateService.editMode) {
       this.canvasRef.nativeElement.addEventListener('pointerdown', this.onHandlePointerDown);
-    } else if (this.meshDrawingActive) {
+    } else if (this.editorStateService.meshDrawingActive) {
       this.canvasRef.nativeElement.addEventListener('pointerdown', this.onPointerDown);
     } else {
       this.canvasRef.nativeElement.addEventListener('pointerdown', this.onRoomSelect);
@@ -152,61 +126,6 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onPointerDown);
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onRoomSelect);
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onHandlePointerDown);
-  }
-
-  // Add 3D axis label (simple plane with text texture)
-
-
-  // Add a simple compass rose in the corner (N/E/S/W)
-  private addCompass() {
-    // Compass is a group of arrows and labels in the +X/+Z quadrant
-    const compassGroup = new THREE.Group();
-    const arrowLen = 1.5;
-    const arrowColor = 0x222222;
-    // North (Z+)
-    compassGroup.add(this.createCompassArrow(0, 0.01, 0, 0, 0, arrowLen, arrowColor, 'N'));
-    // East (X+)
-    compassGroup.add(this.createCompassArrow(0, 0.01, 0, arrowLen, 0, 0, arrowColor, 'E'));
-    // South (Z-)
-    compassGroup.add(this.createCompassArrow(0, 0.01, 0, 0, 0, -arrowLen, arrowColor, 'S'));
-    // West (X-)
-    compassGroup.add(this.createCompassArrow(0, 0.01, 0, -arrowLen, 0, 0, arrowColor, 'W'));
-    compassGroup.position.set(-8, 0, -8);
-    this.threeRenderService.scene.add(compassGroup);
-  }
-
-  // Helper to create a compass arrow with label
-  private createCompassArrow(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, color: number, label: string) {
-    const dir = new THREE.Vector3(x2 - x1, y2 - y1, z2 - z1).normalize();
-    const origin = new THREE.Vector3(x1, y1, z1);
-    const length = new THREE.Vector3(x2 - x1, y2 - y1, z2 - z1).length();
-    const arrowHelper = new THREE.ArrowHelper(dir, origin, length, color, 0.3, 0.15);
-    // Add label at the end
-    const labelSprite = this.createCompassLabel(label, x2, y2, z2, color);
-    const group = new THREE.Group();
-    group.add(arrowHelper);
-    group.add(labelSprite);
-    return group;
-  }
-
-  private createCompassLabel(text: string, x: number, y: number, z: number, color: number) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 32;
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = 'bold 20px Arial';
-    ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-    const texture = new THREE.CanvasTexture(canvas);
-    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
-    const sprite = new THREE.Sprite(mat);
-    sprite.position.set(x, y + 0.1, z);
-    sprite.scale.set(0.7, 0.35, 1);
-    return sprite;
   }
 
   private getWorldXZFromPointer(event: PointerEvent): { x: number, z: number } | null {
@@ -230,46 +149,46 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   // Handles pointer down events for drawing
   private onPointerDown = (event: PointerEvent) => {
-    if (this.ctrlPressed || !this.meshDrawingActive) return;
+    if (this.editorStateService.ctrlPressed || !this.editorStateService.meshDrawingActive) return;
 
-    if (!this.isDrawing) {
-      this.isDrawing = true;
-      this.drawingVertices = [];
+    if (!this.editorStateService.isDrawing) {
+      this.editorStateService.isDrawing = true;
+      this.editorStateService.drawingVertices = [];
       this.clearDrawingVertexHighlights();
 
-      if (this.drawingLine) {
-        this.threeRenderService.scene.remove(this.drawingLine);
-        this.drawingLine.geometry.dispose();
-        (this.drawingLine.material as THREE.Material).dispose();
-        this.drawingLine = null;
+      if (this.editorStateService.drawingLine) {
+        this.threeRenderService.scene.remove(this.editorStateService.drawingLine);
+        this.editorStateService.drawingLine.geometry.dispose();
+        (this.editorStateService.drawingLine.material as THREE.Material).dispose();
+        this.editorStateService.drawingLine = null;
       }
     }
     const point = this.getWorldXZFromPointer(event);
     if (point) {
-      if (this.drawingVertices.length >= 3 && this.isNearFirstVertex(point)) {
+      if (this.editorStateService.drawingVertices.length >= 3 && isNearFirstVertex(point, this.editorStateService.drawingVertices[0], 0.3)) {
         this.closePolygon();
         return;
       }
-      this.drawingVertices.push(point);
+      this.editorStateService.drawingVertices.push(point);
       this.highlightDrawingVertex(point);
       this.updateDrawingLine();
     }
   };
 
   private updateDrawingLine() {
-    if (this.drawingLine) {
-      this.threeRenderService.scene.remove(this.drawingLine);
-      this.drawingLine.geometry.dispose();
-      (this.drawingLine.material as THREE.Material).dispose();
-      this.drawingLine = null;
+    if (this.editorStateService.drawingLine) {
+      this.threeRenderService.scene.remove(this.editorStateService.drawingLine);
+      this.editorStateService.drawingLine.geometry.dispose();
+      (this.editorStateService.drawingLine.material as THREE.Material).dispose();
+      this.editorStateService.drawingLine = null;
     }
-    if (this.drawingVertices.length < 2) return;
+    if (this.editorStateService.drawingVertices.length < 2) return;
 
-    const points = this.drawingVertices.map(v => new THREE.Vector3(v.x, 0.01, v.z));
+    const points = this.editorStateService.drawingVertices.map((v: { x: number, z: number }) => new THREE.Vector3(v.x, 0.01, v.z));
     const geomerty = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
-    this.drawingLine = new THREE.Line(geomerty, material);
-    this.threeRenderService.scene.add(this.drawingLine);
+    this.editorStateService.drawingLine = new THREE.Line(geomerty, material);
+    this.threeRenderService.scene.add(this.editorStateService.drawingLine);
   }
 
   private highlightDrawingVertex(position: { x: number, z: number }) {
@@ -278,50 +197,50 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(position.x, 0.1, position.z);
     this.threeRenderService.scene.add(mesh);
-    this.drawingVertexMeshes.push(mesh);
+    this.editorStateService.drawingVertexMeshes.push(mesh);
   }
 
   private clearDrawingVertexHighlights() {
-    for (const mesh of this.drawingVertexMeshes) {
+    for (const mesh of this.editorStateService.drawingVertexMeshes) {
       this.threeRenderService.scene.remove(mesh);
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
-    this.drawingVertexMeshes = [];
+    this.editorStateService.drawingVertexMeshes = [];
   }
 
   // Find or add a global vertex, return its index
   private findOrAddGlobalVertex(v: { x: number, z: number }, threshold: number = 0.01): number {
-    for (let i = 0; i < this.globalVertices.length; i++) {
-      const gv = this.globalVertices[i];
+    for (let i = 0; i < this.editorStateService.globalVertices.length; i++) {
+      const gv = this.editorStateService.globalVertices[i];
       if (Math.abs(gv.x - v.x) < threshold && Math.abs(gv.z - v.z) < threshold) {
         return i;
       }
     }
-    this.globalVertices.push({ x: v.x, z: v.z });
-    return this.globalVertices.length - 1;
+    this.editorStateService.globalVertices.push({ x: v.x, z: v.z });
+    return this.editorStateService.globalVertices.length - 1;
   }
 
   private closePolygon() {
     console.log('[DEBUG] closePolygon called');
-    this.isDrawing = false;
+    this.editorStateService.isDrawing = false;
     this.clearDrawingVertexHighlights();
-    if (this.drawingLine) {
-      this.threeRenderService.scene.remove(this.drawingLine);
-      this.drawingLine.geometry.dispose();
-      (this.drawingLine.material as THREE.Material).dispose();
-      this.drawingLine = null;
+    if (this.editorStateService.drawingLine) {
+      this.threeRenderService.scene.remove(this.editorStateService.drawingLine);
+      this.editorStateService.drawingLine.geometry.dispose();
+      (this.editorStateService.drawingLine.material as THREE.Material).dispose();
+      this.editorStateService.drawingLine = null;
     }
 
     // Build room as indices into globalVertices
     const indices: number[] = [];
-    for (const v of this.drawingVertices) {
+    for (const v of this.editorStateService.drawingVertices) {
       indices.push(this.findOrAddGlobalVertex(v));
     }
-    this.roomVertexIndices.push(indices);
+    this.editorStateService.roomVertexIndices.push(indices);
 
     // Generate mesh from globalVertices and indices
-    const verts = indices.map(idx => this.globalVertices[idx]);
+    const verts = indices.map(idx => this.editorStateService.globalVertices[idx]);
     const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
     const geometry = new THREE.ShapeGeometry(shape);
     const roomColor = Math.floor(Math.random() * 0xffffff);
@@ -337,40 +256,32 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     mesh.position.y = 0;
     this.threeRenderService.scene.add(mesh);
 
-    this.roomMeshes.push(mesh);
-    console.log('[DEBUG] Room meshes count:', this.roomMeshes.length);
+    this.editorStateService.roomMeshes.push(mesh);
+    console.log('[DEBUG] Room meshes count:', this.editorStateService.roomMeshes.length);
 
     // Add default metadata for the new room
-    const area = this.roomWallService.calculatePolygonArea(verts);
-    this.roomMetadata.push({
-      name: `Room ${this.roomMeshes.length}`,
+    const area = calculatePolygonArea(verts);
+    this.editorStateService.roomMetadata.push({
+      name: `Room ${this.editorStateService.roomMeshes.length}`,
       type: 'Generic',
       area
     });
-    console.log('[DEBUG] Room metadata count:', this.roomMetadata.length, this.roomMetadata);
+    console.log('[DEBUG] Room metadata count:', this.editorStateService.roomMetadata.length, this.editorStateService.roomMetadata);
 
     // Push walls for this new room
     const walls = this.roomWallService.generateWallsForRoom(
       this.threeRenderService.scene, verts, roomColor
     );
-    this.allWallMeshes.push(walls);
+    this.editorStateService.allWallMeshes.push(walls);
 
     // Re-enable selection after drawing
     this.setCanvasListeners();
     console.log('[DEBUG] setCanvasListeners called after closePolygon');
   }
 
-  private isNearFirstVertex(point: { x: number, z: number }, threshold: number = 0.3): boolean {
-    if (this.drawingVertices.length === 0) return false;
-    const first = this.drawingVertices[0];
-    const dx = point.x - first.x;
-    const dz = point.z - first.z;
-    return Math.sqrt(dx * dx + dz * dz) <= threshold;
-  }
-
   private onRoomSelect = (event: PointerEvent) => {
     console.log('[DEBUG] onRoomSelect fired');
-    if (this.ctrlPressed || this.meshDrawingActive) return;
+    if (this.editorStateService.ctrlPressed || this.editorStateService.meshDrawingActive) return;
 
     const rect = this.canvasRef.nativeElement.getBoundingClientRect();
     const mouse = new THREE.Vector2(
@@ -379,19 +290,19 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     );
     this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
 
-    const intersects = this.raycaster.intersectObjects(this.roomMeshes);
+    const intersects = this.raycaster.intersectObjects(this.editorStateService.roomMeshes);
     this.ngZone.run(() => {
       if (intersects.length > 0) {
-        if (this.selectedRoomMesh) {
-          (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+        if (this.editorStateService.selectedRoomMesh) {
+          (this.editorStateService.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
         }
-        this.selectedRoomMesh = intersects[0].object as THREE.Mesh;
-        console.log('[DEBUG] Room selected:', this.selectedRoomMesh, 'Index:', this.selectedRoomIndex);
-        (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0xffff00);
+        this.editorStateService.selectedRoomMesh = intersects[0].object as THREE.Mesh;
+        console.log('[DEBUG] Room selected:', this.editorStateService.selectedRoomMesh, 'Index:', this.selectedRoomIndex);
+        (this.editorStateService.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0xffff00);
       } else {
-        if (this.selectedRoomMesh) {
-          (this.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
-          this.selectedRoomMesh = null;
+        if (this.editorStateService.selectedRoomMesh) {
+          (this.editorStateService.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+          this.editorStateService.selectedRoomMesh = null;
         }
         console.log('[DEBUG] No room selected');
       }
@@ -401,97 +312,97 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   private deleteSelectedRoom() {
     console.log('[DEBUG] deleteSelectedRoom called');
-    if (!this.selectedRoomMesh) return;
+    if (!this.editorStateService.selectedRoomMesh) return;
 
-    const index = this.roomMeshes.indexOf(this.selectedRoomMesh!);
+    const index = this.editorStateService.roomMeshes.indexOf(this.editorStateService.selectedRoomMesh!);
     if (index === -1) return;
 
-    this.threeRenderService.scene.remove(this.selectedRoomMesh);
-    this.selectedRoomMesh.geometry.dispose();
-    (this.selectedRoomMesh.material as THREE.Material).dispose();
-    this.roomMeshes.splice(index, 1);
-    this.roomVertexIndices.splice(index, 1);
-    console.log('[DEBUG] Room deleted. Meshes:', this.roomMeshes.length, 'Metadata:', this.roomMetadata.length);
+    this.threeRenderService.scene.remove(this.editorStateService.selectedRoomMesh);
+    this.editorStateService.selectedRoomMesh.geometry.dispose();
+    (this.editorStateService.selectedRoomMesh.material as THREE.Material).dispose();
+    this.editorStateService.roomMeshes.splice(index, 1);
+    this.editorStateService.roomVertexIndices.splice(index, 1);
+    console.log('[DEBUG] Room deleted. Meshes:', this.editorStateService.roomMeshes.length, 'Metadata:', this.editorStateService.roomMetadata.length);
 
     // Remove metadata for the deleted room
-    this.roomMetadata.splice(index, 1);
+    this.editorStateService.roomMetadata.splice(index, 1);
 
-    const wallMeshes = this.allWallMeshes[index];
+    const wallMeshes = this.editorStateService.allWallMeshes[index];
     if (wallMeshes) {
       for (const wallMesh of wallMeshes) {
         this.threeRenderService.scene.remove(wallMesh);
         wallMesh.geometry.dispose();
         (wallMesh.material as THREE.Material).dispose();
       }
-      this.allWallMeshes.splice(index, 1);
+      this.editorStateService.allWallMeshes.splice(index, 1);
     }
-    this.selectedRoomMesh = null;
+    this.editorStateService.selectedRoomMesh = null;
   }
 
   private showVertexHandles() {
     // Remove any existing handles
-    for (const handle of this.vertexHandles) {
+    for (const handle of this.editorStateService.vertexHandles) {
       this.threeRenderService.scene.remove(handle);
       handle.geometry.dispose();
       (handle.material as THREE.Material).dispose();
     }
-    this.vertexHandles = [];
+    this.editorStateService.vertexHandles = [];
 
-    const index = this.roomMeshes.indexOf(this.selectedRoomMesh!);
+    const index = this.editorStateService.roomMeshes.indexOf(this.editorStateService.selectedRoomMesh!);
     if (index === -1) return;
 
-    this.editingRoomIndex = index;
+    this.editorStateService.editingRoomIndex = index;
     // Use globalVertices for handles
-    const indices = this.roomVertexIndices[this.editingRoomIndex!];
+    const indices = this.editorStateService.roomVertexIndices[this.editorStateService.editingRoomIndex!];
     for (const idx of indices) {
-      const v = this.globalVertices[idx];
+      const v = this.editorStateService.globalVertices[idx];
       const sphereGeometry = new THREE.SphereGeometry(0.35, 25, 25);
       const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
       const handle = new THREE.Mesh(sphereGeometry, sphereMaterial);
       handle.position.set(v.x, 0.1, v.z);
       this.threeRenderService.scene.add(handle);
-      this.vertexHandles.push(handle);
+      this.editorStateService.vertexHandles.push(handle);
     }
   }
 
   private hideVertexHandles() {
-    for (const handle of this.vertexHandles) {
+    for (const handle of this.editorStateService.vertexHandles) {
       this.threeRenderService.scene.remove(handle);
       handle.geometry.dispose();
       (handle.material as THREE.Material).dispose();
     }
-    this.vertexHandles = [];
-    this.editingRoomIndex = null;
+    this.editorStateService.vertexHandles = [];
+    this.editorStateService.editingRoomIndex = null;
   }
 
   private onHandlePointerDown = (event: PointerEvent) => {
-    if (!this.editMode) return;
+    if (!this.editorStateService.editMode) return;
     const rect = this.canvasRef.nativeElement.getBoundingClientRect();
     const mouse = new THREE.Vector2(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
     this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
-    const intersects = this.raycaster.intersectObjects(this.vertexHandles);
+    const intersects = this.raycaster.intersectObjects(this.editorStateService.vertexHandles);
     if (intersects.length > 0) {
-      this.draggingHandleIndex = this.vertexHandles.indexOf(intersects[0].object as THREE.Mesh);
+      this.editorStateService.draggingHandleIndex = this.editorStateService.vertexHandles.indexOf(intersects[0].object as THREE.Mesh);
       event.preventDefault();
       event.stopPropagation(); // avoid any other pointerdown listeners
     }
   };
 
   private onHandlePointerMove = (event: PointerEvent) => {
-    if (!this.editMode || this.draggingHandleIndex === null) return;
+    if (!this.editorStateService.editMode || this.editorStateService.draggingHandleIndex === null) return;
     const point = this.getWorldXZFromPointer(event);
     if (point) {
       // Update the global vertex
-      const indices = this.roomVertexIndices[this.editingRoomIndex!];
-      const globalIdx = indices[this.draggingHandleIndex!];
-      this.globalVertices[globalIdx] = { x: point.x, z: point.z };
-      this.vertexHandles[this.draggingHandleIndex!].position.set(point.x, 0.1, point.z);
+      const indices = this.editorStateService.roomVertexIndices[this.editorStateService.editingRoomIndex!];
+      const globalIdx = indices[this.editorStateService.draggingHandleIndex!];
+      this.editorStateService.globalVertices[globalIdx] = { x: point.x, z: point.z };
+      this.editorStateService.vertexHandles[this.editorStateService.draggingHandleIndex!].position.set(point.x, 0.1, point.z);
       // Update all rooms that use this global vertex
-      for (let roomIdx = 0; roomIdx < this.roomVertexIndices.length; roomIdx++) {
-        if (this.roomVertexIndices[roomIdx].includes(globalIdx)) {
+      for (let roomIdx = 0; roomIdx < this.editorStateService.roomVertexIndices.length; roomIdx++) {
+        if (this.editorStateService.roomVertexIndices[roomIdx].includes(globalIdx)) {
           this.updateRoomMeshAndWalls(roomIdx);
         }
       }
@@ -499,14 +410,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   };
 
   private onHandlePointerUp = (event: PointerEvent) => {
-    if (!this.editMode) return;
-    this.draggingHandleIndex = null;
+    if (!this.editorStateService.editMode) return;
+    this.editorStateService.draggingHandleIndex = null;
   }
 
   private updateRoomMeshAndWalls(roomIndex: number) {
-    const mesh = this.roomMeshes[roomIndex];
-    const indices = this.roomVertexIndices[roomIndex];
-    const verts = indices.map(idx => this.globalVertices[idx]);
+    const mesh = this.editorStateService.roomMeshes[roomIndex];
+    const indices = this.editorStateService.roomVertexIndices[roomIndex];
+    const verts = indices.map(idx => this.editorStateService.globalVertices[idx]);
 
     // Rebuild geometry in XY and keep the same Mesh instance
     const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
@@ -519,36 +430,36 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     mesh.position.y = 0;
 
     // Update handle positions if this is the currently edited room
-    if (this.editingRoomIndex === roomIndex) {
+    if (this.editorStateService.editingRoomIndex === roomIndex) {
       for (let i = 0; i < verts.length; i++) {
-        this.vertexHandles[i].position.set(verts[i].x, 0.1, verts[i].z);
+        this.editorStateService.vertexHandles[i].position.set(verts[i].x, 0.1, verts[i].z);
       }
     }
 
     // Regenerate walls for this room at the same index
-    const oldWalls = this.allWallMeshes[roomIndex] ?? [];
+    const oldWalls = this.editorStateService.allWallMeshes[roomIndex] ?? [];
     for (const wall of oldWalls) {
       this.threeRenderService.scene.remove(wall);
       wall.geometry.dispose();
       (wall.material as THREE.Material).dispose();
     }
-    this.allWallMeshes[roomIndex] = [];
+    this.editorStateService.allWallMeshes[roomIndex] = [];
 
     const roomColor = (mesh.material as THREE.MeshStandardMaterial).color.getHex();
     const walls = this.roomWallService.generateWallsForRoom(
       this.threeRenderService.scene, verts, roomColor
     );
-    this.allWallMeshes[roomIndex] = walls;
+    this.editorStateService.allWallMeshes[roomIndex] = walls;
 
     // Update area in metadata
-    this.roomMetadata[roomIndex].area = this.roomWallService.calculatePolygonArea(verts);
+    this.editorStateService.roomMetadata[roomIndex].area = calculatePolygonArea(verts);
   }
 
   public exportProject() {
     const data = {
-      globalVertices: this.globalVertices,
-      roomVertexIndices: this.roomVertexIndices,
-      roomMetadata: this.roomMetadata
+      globalVertices: this.editorStateService.globalVertices,
+      roomVertexIndices: this.editorStateService.roomVertexIndices,
+      roomMetadata: this.editorStateService.roomMetadata
     };
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
@@ -582,34 +493,34 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   // Restore the editor state from imported data
   private rebuildFromData(data: any) {
     // Clear current scene
-    for (const mesh of this.roomMeshes) {
+    for (const mesh of this.editorStateService.roomMeshes) {
       this.threeRenderService.scene.remove(mesh);
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
-    for (const wallArr of this.allWallMeshes) {
+    for (const wallArr of this.editorStateService.allWallMeshes) {
       for (const wall of wallArr) {
         this.threeRenderService.scene.remove(wall);
         wall.geometry.dispose();
         (wall.material as THREE.Material).dispose();
       }
     }
-    this.roomMeshes = [];
-    this.allWallMeshes = [];
-    this.roomMetadata = [];
-    this.globalVertices = [];
-    this.roomVertexIndices = [];
-    this.selectedRoomMesh = null;
+    this.editorStateService.roomMeshes = [];
+    this.editorStateService.allWallMeshes = [];
+    this.editorStateService.roomMetadata = [];
+    this.editorStateService.globalVertices = [];
+    this.editorStateService.roomVertexIndices = [];
+    this.editorStateService.selectedRoomMesh = null;
 
     // Restore data
-    this.globalVertices = data.globalVertices || [];
-    this.roomVertexIndices = data.roomVertexIndices || [];
-    this.roomMetadata = data.roomMetadata || [];
+    this.editorStateService.globalVertices = data.globalVertices || [];
+    this.editorStateService.roomVertexIndices = data.roomVertexIndices || [];
+    this.editorStateService.roomMetadata = data.roomMetadata || [];
 
     // Rebuild meshes and walls
-    for (let i = 0; i < this.roomVertexIndices.length; i++) {
-      const indices = this.roomVertexIndices[i];
-      const verts = indices.map(idx => this.globalVertices[idx]);
+    for (let i = 0; i < this.editorStateService.roomVertexIndices.length; i++) {
+      const indices = this.editorStateService.roomVertexIndices[i];
+      const verts = indices.map(idx => this.editorStateService.globalVertices[idx]);
       const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
       const geometry = new THREE.ShapeGeometry(shape);
       const roomColor = Math.floor(Math.random() * 0xffffff);
@@ -623,11 +534,11 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.y = 0;
       this.threeRenderService.scene.add(mesh);
-      this.roomMeshes.push(mesh);
+      this.editorStateService.roomMeshes.push(mesh);
       const walls = this.roomWallService.generateWallsForRoom(
         this.threeRenderService.scene, verts, roomColor
       );
-      this.allWallMeshes.push(walls);
+      this.editorStateService.allWallMeshes.push(walls);
     }
     this.setCanvasListeners();
     this.cdr.detectChanges();
@@ -639,9 +550,9 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const title = this.projectTitle.trim() || 'Untitled Project';
     const project: ProjectData = {
       title,
-      globalVertices: this.globalVertices,
-      roomVertexIndices: this.roomVertexIndices,
-      roomMetadata: this.roomMetadata
+      globalVertices: this.editorStateService.globalVertices,
+      roomVertexIndices: this.editorStateService.roomVertexIndices,
+      roomMetadata: this.editorStateService.roomMetadata
     };
     this.projectService.saveProject(project).subscribe({
       next: (saved) => alert('Project saved! ID: ' + saved._id),
@@ -655,5 +566,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       next: (data) => this.rebuildFromData(data),
       error: (err) => alert('Load failed: ' + err.message)
     });
+  }
+
+  public get roomMetadata() {
+    return this.editorStateService.roomMetadata;
+  }
+  public get selectedRoomMesh() {
+    return this.editorStateService.selectedRoomMesh;
   }
 }

@@ -76,23 +76,6 @@ export class ThreeRenderService {
         // Add axis labels if needed (can be moved here from component)
     }
 
-    private addCompass() {
-        // Compass is a group of arrows and labels in the +X/+Z quadrant
-        const compassGroup = new THREE.Group();
-        const arrowLen = 1.5;
-        const arrowColor = 0x222222;
-        // North (Z+)
-        compassGroup.add(this.createCompassArrow(0, 0.01, 0, 0, 0, arrowLen, arrowColor, 'N'));
-        // East (X+)
-        compassGroup.add(this.createCompassArrow(0, 0.01, 0, arrowLen, 0, 0, arrowColor, 'E'));
-        // South (Z-)
-        compassGroup.add(this.createCompassArrow(0, 0.01, 0, 0, 0, -arrowLen, arrowColor, 'S'));
-        // West (X-)
-        compassGroup.add(this.createCompassArrow(0, 0.01, 0, -arrowLen, 0, 0, arrowColor, 'W'));
-        compassGroup.position.set(-8, 0, -8);
-        this.scene.add(compassGroup);
-    }
-
     private addAxisLabel(text: string, x: number, y: number, z: number, color: number, scale = 1) {
         const canvas = document.createElement('canvas');
         canvas.width = 128;
@@ -111,6 +94,23 @@ export class ThreeRenderService {
         sprite.position.set(x, y, z);
         sprite.scale.set(1.5 * scale, 0.75 * scale, 1);
         this.scene.add(sprite);
+    }
+
+    private addCompass() {
+        // Compass is a group of arrows and labels in the +X/+Z quadrant
+        const compassGroup = new THREE.Group();
+        const arrowLen = 1.5;
+        const arrowColor = 0x222222;
+        // North (Z+)
+        compassGroup.add(this.createCompassArrow(0, 0.01, 0, 0, 0, arrowLen, arrowColor, 'N'));
+        // East (X+)
+        compassGroup.add(this.createCompassArrow(0, 0.01, 0, arrowLen, 0, 0, arrowColor, 'E'));
+        // South (Z-)
+        compassGroup.add(this.createCompassArrow(0, 0.01, 0, 0, 0, -arrowLen, arrowColor, 'S'));
+        // West (X-)
+        compassGroup.add(this.createCompassArrow(0, 0.01, 0, -arrowLen, 0, 0, arrowColor, 'W'));
+        compassGroup.position.set(-8, 0, -8);
+        this.scene.add(compassGroup);
     }
     
     private createCompassArrow(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number, color: number, label: string) {
