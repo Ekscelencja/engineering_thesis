@@ -8,6 +8,7 @@
 		Import Project (JSON)
 		<input type="file" accept="application/json" (change)="importProject($event)" style="display:inline-block;" />
 	</label>
+	<input type="text" [(ngModel)]="projectTitle" placeholder="Project Title" style="margin-left:10px;" />
 	<button (click)="saveProjectToServer()">Save to Server</button>
 	<!-- For loading, you can use an input for the project ID: -->
 	<input #projId type="text" placeholder="Project ID" />

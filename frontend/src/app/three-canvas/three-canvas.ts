@@ -30,6 +30,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
 
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
+  private drawingVertexMeshes: THREE.Mesh[] = [];
   private drawingVertices: { x: number, z: number }[] = [];
   private isDrawing: boolean = false;
   private drawingLine: THREE.Line | null = null;
@@ -114,11 +115,23 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     if (event.key === 'd' || event.key === 'D') {
       this.meshDrawingActive = !this.meshDrawingActive;
       this.setCanvasListeners();
+      if (!this.meshDrawingActive) {
+        // Remove unfinished drawing line and vertex highlights
+        if (this.drawingLine) {
+          this.scene.remove(this.drawingLine);
+          this.drawingLine.geometry.dispose();
+          (this.drawingLine.material as THREE.Material).dispose();
+          this.drawingLine = null;
+        }
+        this.clearDrawingVertexHighlights();
+        this.isDrawing = false;
+        this.drawingVertices = [];
+      }
     }
     if (event.key === 'e' || event.key === 'E') {
       this.editMode = !this.editMode;
       console.log('Edit mode:', this.editMode);
-      this.setCanvasListeners(); // <-- add this line
+      this.setCanvasListeners();
       if (this.editMode && this.selectedRoomMesh) {
         this.showVertexHandles();
       } else {
@@ -300,6 +313,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     if (!this.isDrawing) {
       this.isDrawing = true;
       this.drawingVertices = [];
+      this.clearDrawingVertexHighlights();
 
       if (this.drawingLine) {
         this.scene.remove(this.drawingLine);
@@ -315,6 +329,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
         return;
       }
       this.drawingVertices.push(point);
+      this.highlightDrawingVertex(point);
       this.updateDrawingLine();
     }
   };
@@ -335,6 +350,24 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     this.scene.add(this.drawingLine);
   }
 
+  private highlightDrawingVertex(position: { x: number, z: number }) {
+    const geometry = new THREE.SphereGeometry(0.2, 16, 16);
+    const material = new THREE.MeshStandardMaterial({ color: 0xff8800 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(position.x, 0.1, position.z);
+    this.scene.add(mesh);
+    this.drawingVertexMeshes.push(mesh);
+  }
+
+  private clearDrawingVertexHighlights() {
+    for (const mesh of this.drawingVertexMeshes) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    this.drawingVertexMeshes = [];
+  }
+
   // Find or add a global vertex, return its index
   private findOrAddGlobalVertex(v: { x: number, z: number }, threshold: number = 0.01): number {
     for (let i = 0; i < this.globalVertices.length; i++) {
@@ -350,6 +383,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private closePolygon() {
     console.log('[DEBUG] closePolygon called');
     this.isDrawing = false;
+    this.clearDrawingVertexHighlights();
     if (this.drawingLine) {
       this.scene.remove(this.drawingLine);
       this.drawingLine.geometry.dispose();
@@ -725,9 +759,12 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  public projectTitle: string = '';
+
   public saveProjectToServer() {
+    const title = this.projectTitle.trim() || 'Untitled Project';
     const project: ProjectData = {
-      title: 'My Project', // You can make this dynamic
+      title,
       globalVertices: this.globalVertices,
       roomVertexIndices: this.roomVertexIndices,
       roomMetadata: this.roomMetadata
