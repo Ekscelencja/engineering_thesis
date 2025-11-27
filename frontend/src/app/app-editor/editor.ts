@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ProjectService, ProjectData } from '../services/api/project.service';
 import { ThreeRenderService } from '../services/threejs/three-render.service';
+import { RoomWallService } from '../services/threejs/room-wall.service';
 
 // Room metadata interface
 interface RoomMetadata {
@@ -23,7 +24,7 @@ import { OrbitControls } from 'three/examples/jsm/Addons.js';
 })
 export class EditorComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
-  
+
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private drawingVertexMeshes: THREE.Mesh[] = [];
@@ -53,16 +54,17 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private roomVertexIndices: number[][] = []; // Each room: array of indices into globalVertices
 
   constructor(
-    private ngZone: NgZone, 
-    private cdr: ChangeDetectorRef, 
-    private projectService: ProjectService, 
-    public threeRender: ThreeRenderService
+    private ngZone: NgZone,
+    private cdr: ChangeDetectorRef,
+    private projectService: ProjectService,
+    public threeRenderService: ThreeRenderService,
+    private roomWallService: RoomWallService
   ) { }
 
   ngAfterViewInit() {
-    this.threeRender.init(this.canvasRef.nativeElement);
-    this.threeRender.animate();
-    window.addEventListener('resize', () => this.threeRender.resize(this.canvasRef.nativeElement));
+    this.threeRenderService.init(this.canvasRef.nativeElement);
+    this.threeRenderService.animate();
+    window.addEventListener('resize', () => this.threeRenderService.resize(this.canvasRef.nativeElement));
     // Attach mouse event listener for drawing
     this.ngZone.runOutsideAngular(() => {
       this.setCanvasListeners();
@@ -75,21 +77,21 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.threeRender.stopAnimation();
-    if (this.threeRender.renderer) this.threeRender.renderer.dispose();
+    this.threeRenderService.stopAnimation();
+    if (this.threeRenderService.renderer) this.threeRenderService.renderer.dispose();
     this.deleteCanvasListeners();
     window.removeEventListener('pointermove', this.onHandlePointerMove);
     window.removeEventListener('pointerup', this.onHandlePointerUp);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('keypress', this.onKeyPress);
-    window.removeEventListener('resize', () => this.threeRender.resize(this.canvasRef.nativeElement));
+    window.removeEventListener('resize', () => this.threeRenderService.resize(this.canvasRef.nativeElement));
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Control') {
       this.ctrlPressed = true;
-      if (this.ctrlPressed) this.threeRender.controls.enabled = true;
+      if (this.ctrlPressed) this.threeRenderService.controls.enabled = true;
     }
     if (event.key === 'Delete') {
       this.deleteSelectedRoom();
@@ -99,7 +101,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private onKeyUp = (event: KeyboardEvent) => {
     if (event.key === 'Control') {
       this.ctrlPressed = false;
-      if (!this.ctrlPressed) this.threeRender.controls.enabled = false;
+      if (!this.ctrlPressed) this.threeRenderService.controls.enabled = false;
     }
   };
 
@@ -110,7 +112,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       if (!this.meshDrawingActive) {
         // Remove unfinished drawing line and vertex highlights
         if (this.drawingLine) {
-          this.threeRender.scene.remove(this.drawingLine);
+          this.threeRenderService.scene.remove(this.drawingLine);
           this.drawingLine.geometry.dispose();
           (this.drawingLine.material as THREE.Material).dispose();
           this.drawingLine = null;
@@ -153,7 +155,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   // Add 3D axis label (simple plane with text texture)
-  
+
 
   // Add a simple compass rose in the corner (N/E/S/W)
   private addCompass() {
@@ -170,7 +172,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     // West (X-)
     compassGroup.add(this.createCompassArrow(0, 0.01, 0, -arrowLen, 0, 0, arrowColor, 'W'));
     compassGroup.position.set(-8, 0, -8);
-    this.threeRender.scene.add(compassGroup);
+    this.threeRenderService.scene.add(compassGroup);
   }
 
   // Helper to create a compass arrow with label
@@ -213,7 +215,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
-    this.raycaster.setFromCamera(mouse, this.threeRender.camera);
+    this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // XZ plane at Y=0
     const intersection = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(plane, intersection)) {
@@ -236,7 +238,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       this.clearDrawingVertexHighlights();
 
       if (this.drawingLine) {
-        this.threeRender.scene.remove(this.drawingLine);
+        this.threeRenderService.scene.remove(this.drawingLine);
         this.drawingLine.geometry.dispose();
         (this.drawingLine.material as THREE.Material).dispose();
         this.drawingLine = null;
@@ -256,7 +258,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   private updateDrawingLine() {
     if (this.drawingLine) {
-      this.threeRender.scene.remove(this.drawingLine);
+      this.threeRenderService.scene.remove(this.drawingLine);
       this.drawingLine.geometry.dispose();
       (this.drawingLine.material as THREE.Material).dispose();
       this.drawingLine = null;
@@ -267,7 +269,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const geomerty = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
     this.drawingLine = new THREE.Line(geomerty, material);
-    this.threeRender.scene.add(this.drawingLine);
+    this.threeRenderService.scene.add(this.drawingLine);
   }
 
   private highlightDrawingVertex(position: { x: number, z: number }) {
@@ -275,13 +277,13 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const material = new THREE.MeshStandardMaterial({ color: 0xff8800 });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(position.x, 0.1, position.z);
-    this.threeRender.scene.add(mesh);
+    this.threeRenderService.scene.add(mesh);
     this.drawingVertexMeshes.push(mesh);
   }
 
   private clearDrawingVertexHighlights() {
     for (const mesh of this.drawingVertexMeshes) {
-      this.threeRender.scene.remove(mesh);
+      this.threeRenderService.scene.remove(mesh);
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
@@ -305,7 +307,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.isDrawing = false;
     this.clearDrawingVertexHighlights();
     if (this.drawingLine) {
-      this.threeRender.scene.remove(this.drawingLine);
+      this.threeRenderService.scene.remove(this.drawingLine);
       this.drawingLine.geometry.dispose();
       (this.drawingLine.material as THREE.Material).dispose();
       this.drawingLine = null;
@@ -333,13 +335,13 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0;
-    this.threeRender.scene.add(mesh);
+    this.threeRenderService.scene.add(mesh);
 
     this.roomMeshes.push(mesh);
     console.log('[DEBUG] Room meshes count:', this.roomMeshes.length);
 
     // Add default metadata for the new room
-    const area = this.calculatePolygonArea(verts);
+    const area = this.roomWallService.calculatePolygonArea(verts);
     this.roomMetadata.push({
       name: `Room ${this.roomMeshes.length}`,
       type: 'Generic',
@@ -348,22 +350,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     console.log('[DEBUG] Room metadata count:', this.roomMetadata.length, this.roomMetadata);
 
     // Push walls for this new room
-    this.generateWallsForRoom(verts, roomColor);
+    const walls = this.roomWallService.generateWallsForRoom(
+      this.threeRenderService.scene, verts, roomColor
+    );
+    this.allWallMeshes.push(walls);
 
     // Re-enable selection after drawing
     this.setCanvasListeners();
     console.log('[DEBUG] setCanvasListeners called after closePolygon');
-  }
-  // Shoelace formula for area of polygon (XZ plane)
-  private calculatePolygonArea(vertices: { x: number, z: number }[]): number {
-    let area = 0;
-    const n = vertices.length;
-    for (let i = 0; i < n; i++) {
-      const v1 = vertices[i];
-      const v2 = vertices[(i + 1) % n];
-      area += v1.x * v2.z - v2.x * v1.z;
-    }
-    return Math.abs(area) / 2;
   }
 
   private isNearFirstVertex(point: { x: number, z: number }, threshold: number = 0.3): boolean {
@@ -372,44 +366,6 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const dx = point.x - first.x;
     const dz = point.z - first.z;
     return Math.sqrt(dx * dx + dz * dz) <= threshold;
-  }
-
-  private generateWallsForRoom(
-    vertices: { x: number, z: number }[],
-    roomColor: number,
-    overrideIndex?: number
-  ) {
-    const currentRoomWalls: THREE.Mesh[] = [];
-
-    for (let i = 0; i < vertices.length; i++) {
-      const startV = vertices[i];
-      const endV = vertices[(i + 1) % vertices.length];
-
-      const dx = endV.x - startV.x;
-      const dz = endV.z - startV.z;
-      const length = Math.sqrt(dx * dx + dz * dz);
-      const angle = Math.atan2(dz, dx);
-
-      const wallGeometry = new THREE.BoxGeometry(length, this.wallHeight, this.wallThickness);
-      const wallMaterial = new THREE.MeshStandardMaterial({ color: roomColor });
-      const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
-
-      wallMesh.position.set(
-        (startV.x + endV.x) / 2,
-        this.wallHeight / 2,
-        (startV.z + endV.z) / 2
-      );
-      wallMesh.rotation.y = -angle;
-
-      this.threeRender.scene.add(wallMesh);
-      currentRoomWalls.push(wallMesh);
-    }
-
-    if (overrideIndex !== undefined) {
-      this.allWallMeshes[overrideIndex] = currentRoomWalls;
-    } else {
-      this.allWallMeshes.push(currentRoomWalls);
-    }
   }
 
   private onRoomSelect = (event: PointerEvent) => {
@@ -421,7 +377,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
-    this.raycaster.setFromCamera(mouse, this.threeRender.camera);
+    this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
 
     const intersects = this.raycaster.intersectObjects(this.roomMeshes);
     this.ngZone.run(() => {
@@ -450,7 +406,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const index = this.roomMeshes.indexOf(this.selectedRoomMesh!);
     if (index === -1) return;
 
-    this.threeRender.scene.remove(this.selectedRoomMesh);
+    this.threeRenderService.scene.remove(this.selectedRoomMesh);
     this.selectedRoomMesh.geometry.dispose();
     (this.selectedRoomMesh.material as THREE.Material).dispose();
     this.roomMeshes.splice(index, 1);
@@ -463,7 +419,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const wallMeshes = this.allWallMeshes[index];
     if (wallMeshes) {
       for (const wallMesh of wallMeshes) {
-        this.threeRender.scene.remove(wallMesh);
+        this.threeRenderService.scene.remove(wallMesh);
         wallMesh.geometry.dispose();
         (wallMesh.material as THREE.Material).dispose();
       }
@@ -475,7 +431,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private showVertexHandles() {
     // Remove any existing handles
     for (const handle of this.vertexHandles) {
-      this.threeRender.scene.remove(handle);
+      this.threeRenderService.scene.remove(handle);
       handle.geometry.dispose();
       (handle.material as THREE.Material).dispose();
     }
@@ -493,14 +449,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
       const handle = new THREE.Mesh(sphereGeometry, sphereMaterial);
       handle.position.set(v.x, 0.1, v.z);
-      this.threeRender.scene.add(handle);
+      this.threeRenderService.scene.add(handle);
       this.vertexHandles.push(handle);
     }
   }
 
   private hideVertexHandles() {
     for (const handle of this.vertexHandles) {
-      this.threeRender.scene.remove(handle);
+      this.threeRenderService.scene.remove(handle);
       handle.geometry.dispose();
       (handle.material as THREE.Material).dispose();
     }
@@ -515,7 +471,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
-    this.raycaster.setFromCamera(mouse, this.threeRender.camera);
+    this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
     const intersects = this.raycaster.intersectObjects(this.vertexHandles);
     if (intersects.length > 0) {
       this.draggingHandleIndex = this.vertexHandles.indexOf(intersects[0].object as THREE.Mesh);
@@ -546,7 +502,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     if (!this.editMode) return;
     this.draggingHandleIndex = null;
   }
-  
+
   private updateRoomMeshAndWalls(roomIndex: number) {
     const mesh = this.roomMeshes[roomIndex];
     const indices = this.roomVertexIndices[roomIndex];
@@ -572,17 +528,20 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     // Regenerate walls for this room at the same index
     const oldWalls = this.allWallMeshes[roomIndex] ?? [];
     for (const wall of oldWalls) {
-      this.threeRender.scene.remove(wall);
+      this.threeRenderService.scene.remove(wall);
       wall.geometry.dispose();
       (wall.material as THREE.Material).dispose();
     }
     this.allWallMeshes[roomIndex] = [];
 
     const roomColor = (mesh.material as THREE.MeshStandardMaterial).color.getHex();
-    this.generateWallsForRoom(verts, roomColor, roomIndex);
+    const walls = this.roomWallService.generateWallsForRoom(
+      this.threeRenderService.scene, verts, roomColor
+    );
+    this.allWallMeshes[roomIndex] = walls;
 
     // Update area in metadata
-    this.roomMetadata[roomIndex].area = this.calculatePolygonArea(verts);
+    this.roomMetadata[roomIndex].area = this.roomWallService.calculatePolygonArea(verts);
   }
 
   public exportProject() {
@@ -624,13 +583,13 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private rebuildFromData(data: any) {
     // Clear current scene
     for (const mesh of this.roomMeshes) {
-      this.threeRender.scene.remove(mesh);
+      this.threeRenderService.scene.remove(mesh);
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
     for (const wallArr of this.allWallMeshes) {
       for (const wall of wallArr) {
-        this.threeRender.scene.remove(wall);
+        this.threeRenderService.scene.remove(wall);
         wall.geometry.dispose();
         (wall.material as THREE.Material).dispose();
       }
@@ -663,9 +622,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.y = 0;
-      this.threeRender.scene.add(mesh);
+      this.threeRenderService.scene.add(mesh);
       this.roomMeshes.push(mesh);
-      this.generateWallsForRoom(verts, roomColor);
+      const walls = this.roomWallService.generateWallsForRoom(
+        this.threeRenderService.scene, verts, roomColor
+      );
+      this.allWallMeshes.push(walls);
     }
     this.setCanvasListeners();
     this.cdr.detectChanges();
