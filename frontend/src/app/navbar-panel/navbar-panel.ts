@@ -24,4 +24,10 @@ export class NavbarPanel {
   toggle() {
     this.expanded.update(v => !v);
   }
+
+  logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    this.router.navigate(['/auth']);
+  }
 }
