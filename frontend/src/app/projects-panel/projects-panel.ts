@@ -1,10 +1,10 @@
 import { Component } from '@angular/core';
-import { ThreeCanvasComponent } from '../three-canvas/three-canvas';
+import { EditorComponent } from '../app-editor/editor';
 
 @Component({
   selector: 'app-projects-panel',
   standalone: true,
-  imports: [ThreeCanvasComponent],
+  imports: [EditorComponent],
   templateUrl: './projects-panel.html',
   styleUrls: ['./projects-panel.scss']
 })

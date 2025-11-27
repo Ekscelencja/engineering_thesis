@@ -4,7 +4,7 @@ import { provideRouter } from '@angular/router';
 import { AppComponent } from './app/app';
 import { routes } from './app/app.routes';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { authInterceptorFn } from './app/services/auth.interceptor';
+import { authInterceptorFn } from './app/services/api/auth.interceptor';
 
 bootstrapApplication(AppComponent, {
   ...appConfig,

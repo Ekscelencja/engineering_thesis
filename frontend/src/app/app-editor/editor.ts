@@ -1,7 +1,8 @@
 import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, signal, NgZone, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ProjectService, ProjectData } from '../services/project.service';
+import { ProjectService, ProjectData } from '../services/api/project.service';
+import { ThreeRenderService } from '../services/threejs/three-render.service';
 
 // Room metadata interface
 interface RoomMetadata {
@@ -14,20 +15,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
 
 @Component({
-  selector: 'app-three-canvas',
+  selector: 'app-editor',
   standalone: true,
-  templateUrl: './three-canvas.html',
-  styleUrls: ['./three-canvas.scss'],
+  templateUrl: './editor.html',
+  styleUrls: ['./editor.scss'],
   imports: [CommonModule, FormsModule]
 })
-export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
+export class EditorComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
-
-  private renderer!: THREE.WebGLRenderer;
-  private scene!: THREE.Scene;
-  private camera!: THREE.PerspectiveCamera;
-  private animationId: number | null = null;
-
+  
   private raycaster = new THREE.Raycaster();
   private mouse = new THREE.Vector2();
   private drawingVertexMeshes: THREE.Mesh[] = [];
@@ -42,7 +38,6 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     console.log('[DEBUG] selectedRoomIndex:', idx);
     return idx;
   }
-  private controls!: OrbitControls;
   private ctrlPressed: boolean = false;
   private meshDrawingActive: boolean = false;
   private allWallMeshes: THREE.Mesh[][] = [];
@@ -57,12 +52,17 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private globalVertices: { x: number, z: number }[] = [];
   private roomVertexIndices: number[][] = []; // Each room: array of indices into globalVertices
 
-  constructor(private ngZone: NgZone, private cdr: ChangeDetectorRef, private projectService: ProjectService) { }
+  constructor(
+    private ngZone: NgZone, 
+    private cdr: ChangeDetectorRef, 
+    private projectService: ProjectService, 
+    public threeRender: ThreeRenderService
+  ) { }
 
   ngAfterViewInit() {
-    this.initThree();
-    this.animate();
-    window.addEventListener('resize', this.onResize);
+    this.threeRender.init(this.canvasRef.nativeElement);
+    this.threeRender.animate();
+    window.addEventListener('resize', () => this.threeRender.resize(this.canvasRef.nativeElement));
     // Attach mouse event listener for drawing
     this.ngZone.runOutsideAngular(() => {
       this.setCanvasListeners();
@@ -75,21 +75,21 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    if (this.animationId) cancelAnimationFrame(this.animationId);
-    if (this.renderer) this.renderer.dispose();
+    this.threeRender.stopAnimation();
+    if (this.threeRender.renderer) this.threeRender.renderer.dispose();
     this.deleteCanvasListeners();
     window.removeEventListener('pointermove', this.onHandlePointerMove);
     window.removeEventListener('pointerup', this.onHandlePointerUp);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('keypress', this.onKeyPress);
-    window.removeEventListener('resize', this.onResize);
+    window.removeEventListener('resize', () => this.threeRender.resize(this.canvasRef.nativeElement));
   }
 
   private onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Control') {
       this.ctrlPressed = true;
-      if (this.ctrlPressed) this.controls.enabled = true;
+      if (this.ctrlPressed) this.threeRender.controls.enabled = true;
     }
     if (event.key === 'Delete') {
       this.deleteSelectedRoom();
@@ -99,17 +99,9 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private onKeyUp = (event: KeyboardEvent) => {
     if (event.key === 'Control') {
       this.ctrlPressed = false;
-      if (!this.ctrlPressed) this.controls.enabled = false;
+      if (!this.ctrlPressed) this.threeRender.controls.enabled = false;
     }
   };
-
-  private onResize = () => {
-    const width = this.canvasRef.nativeElement.clientWidth || window.innerWidth;
-    const height = this.canvasRef.nativeElement.clientHeight || window.innerHeight;
-    this.renderer.setSize(width, height);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-  }
 
   private onKeyPress = (event: KeyboardEvent) => {
     if (event.key === 'd' || event.key === 'D') {
@@ -118,7 +110,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       if (!this.meshDrawingActive) {
         // Remove unfinished drawing line and vertex highlights
         if (this.drawingLine) {
-          this.scene.remove(this.drawingLine);
+          this.threeRender.scene.remove(this.drawingLine);
           this.drawingLine.geometry.dispose();
           (this.drawingLine.material as THREE.Material).dispose();
           this.drawingLine = null;
@@ -160,80 +152,8 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onHandlePointerDown);
   }
 
-  private initThree() {
-    const width = this.canvasRef.nativeElement.clientWidth || 800;
-    const height = this.canvasRef.nativeElement.clientHeight || 600;
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-    this.camera.position.set(0, 35, 0);
-    this.camera.lookAt(0, 0, 0);
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvasRef.nativeElement, antialias: true });
-    this.renderer.setSize(width, height);
-    this.renderer.setClearColor(0xdedede);
-
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    this.controls.screenSpacePanning = false;
-    this.controls.minDistance = 5;
-    this.controls.maxDistance = 50;
-    this.controls.maxPolarAngle = Math.PI / 2; // Limit to horizontal view
-
-    // Grid: 1 unit = 1 meter, 40x40 meters
-    const grid = new THREE.GridHelper(40, 40, 0x888888, 0xbbbbbb);
-    (grid.material as THREE.Material).opacity = 0.8;
-    (grid.material as THREE.Material).transparent = true;
-    this.scene.add(grid);
-    const axesHelper = new THREE.AxesHelper(5);
-    this.scene.add(axesHelper);
-    // Axis labels (X, Z)
-    this.addAxisLabel('X', 10.5, 0.01, 0, 0xff3333);
-    this.addAxisLabel('Z', 0, 0.01, 10.5, 0x3333ff);
-
-    // Tick marks every 5 meters
-    for (let i = -10; i <= 10; i += 5) {
-      if (i !== 0) {
-        this.addAxisLabel(i.toString(), i, 0.01, 0, 0xff3333, 0.5);
-        this.addAxisLabel(i.toString(), 0, 0.01, i, 0x3333ff, 0.5);
-      }
-    }
-
-    // Compass (N/E/S/W) - simple arrows
-    this.addCompass();
-
-    // Remove test cube for now
-    // const geometry = new THREE.BoxGeometry();
-    // const material = new THREE.MeshStandardMaterial({ color: 0x0077ff });
-    // const cube = new THREE.Mesh(geometry, material);
-    // cube.position.set(0, 0.5, 0);
-    // this.scene.add(cube);
-
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(5, 10, 7.5);
-    this.scene.add(light);
-
-  }
-
   // Add 3D axis label (simple plane with text texture)
-  private addAxisLabel(text: string, x: number, y: number, z: number, color: number, scale = 1) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 128;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = 'bold 36px Arial';
-    ctx.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-    const texture = new THREE.CanvasTexture(canvas);
-    const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
-    const sprite = new THREE.Sprite(mat);
-    sprite.position.set(x, y, z);
-    sprite.scale.set(1.5 * scale, 0.75 * scale, 1);
-    this.scene.add(sprite);
-  }
+  
 
   // Add a simple compass rose in the corner (N/E/S/W)
   private addCompass() {
@@ -250,7 +170,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     // West (X-)
     compassGroup.add(this.createCompassArrow(0, 0.01, 0, -arrowLen, 0, 0, arrowColor, 'W'));
     compassGroup.position.set(-8, 0, -8);
-    this.scene.add(compassGroup);
+    this.threeRender.scene.add(compassGroup);
   }
 
   // Helper to create a compass arrow with label
@@ -293,7 +213,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
-    this.raycaster.setFromCamera(mouse, this.camera);
+    this.raycaster.setFromCamera(mouse, this.threeRender.camera);
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // XZ plane at Y=0
     const intersection = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(plane, intersection)) {
@@ -316,7 +236,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       this.clearDrawingVertexHighlights();
 
       if (this.drawingLine) {
-        this.scene.remove(this.drawingLine);
+        this.threeRender.scene.remove(this.drawingLine);
         this.drawingLine.geometry.dispose();
         (this.drawingLine.material as THREE.Material).dispose();
         this.drawingLine = null;
@@ -336,7 +256,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
 
   private updateDrawingLine() {
     if (this.drawingLine) {
-      this.scene.remove(this.drawingLine);
+      this.threeRender.scene.remove(this.drawingLine);
       this.drawingLine.geometry.dispose();
       (this.drawingLine.material as THREE.Material).dispose();
       this.drawingLine = null;
@@ -347,7 +267,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     const geomerty = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
     this.drawingLine = new THREE.Line(geomerty, material);
-    this.scene.add(this.drawingLine);
+    this.threeRender.scene.add(this.drawingLine);
   }
 
   private highlightDrawingVertex(position: { x: number, z: number }) {
@@ -355,13 +275,13 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     const material = new THREE.MeshStandardMaterial({ color: 0xff8800 });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(position.x, 0.1, position.z);
-    this.scene.add(mesh);
+    this.threeRender.scene.add(mesh);
     this.drawingVertexMeshes.push(mesh);
   }
 
   private clearDrawingVertexHighlights() {
     for (const mesh of this.drawingVertexMeshes) {
-      this.scene.remove(mesh);
+      this.threeRender.scene.remove(mesh);
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
@@ -385,7 +305,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     this.isDrawing = false;
     this.clearDrawingVertexHighlights();
     if (this.drawingLine) {
-      this.scene.remove(this.drawingLine);
+      this.threeRender.scene.remove(this.drawingLine);
       this.drawingLine.geometry.dispose();
       (this.drawingLine.material as THREE.Material).dispose();
       this.drawingLine = null;
@@ -413,7 +333,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     const mesh = new THREE.Mesh(geometry, material);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = 0;
-    this.scene.add(mesh);
+    this.threeRender.scene.add(mesh);
 
     this.roomMeshes.push(mesh);
     console.log('[DEBUG] Room meshes count:', this.roomMeshes.length);
@@ -481,7 +401,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       );
       wallMesh.rotation.y = -angle;
 
-      this.scene.add(wallMesh);
+      this.threeRender.scene.add(wallMesh);
       currentRoomWalls.push(wallMesh);
     }
 
@@ -501,7 +421,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
-    this.raycaster.setFromCamera(mouse, this.camera);
+    this.raycaster.setFromCamera(mouse, this.threeRender.camera);
 
     const intersects = this.raycaster.intersectObjects(this.roomMeshes);
     this.ngZone.run(() => {
@@ -530,7 +450,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     const index = this.roomMeshes.indexOf(this.selectedRoomMesh!);
     if (index === -1) return;
 
-    this.scene.remove(this.selectedRoomMesh);
+    this.threeRender.scene.remove(this.selectedRoomMesh);
     this.selectedRoomMesh.geometry.dispose();
     (this.selectedRoomMesh.material as THREE.Material).dispose();
     this.roomMeshes.splice(index, 1);
@@ -543,7 +463,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     const wallMeshes = this.allWallMeshes[index];
     if (wallMeshes) {
       for (const wallMesh of wallMeshes) {
-        this.scene.remove(wallMesh);
+        this.threeRender.scene.remove(wallMesh);
         wallMesh.geometry.dispose();
         (wallMesh.material as THREE.Material).dispose();
       }
@@ -555,7 +475,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private showVertexHandles() {
     // Remove any existing handles
     for (const handle of this.vertexHandles) {
-      this.scene.remove(handle);
+      this.threeRender.scene.remove(handle);
       handle.geometry.dispose();
       (handle.material as THREE.Material).dispose();
     }
@@ -573,14 +493,14 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
       const handle = new THREE.Mesh(sphereGeometry, sphereMaterial);
       handle.position.set(v.x, 0.1, v.z);
-      this.scene.add(handle);
+      this.threeRender.scene.add(handle);
       this.vertexHandles.push(handle);
     }
   }
 
   private hideVertexHandles() {
     for (const handle of this.vertexHandles) {
-      this.scene.remove(handle);
+      this.threeRender.scene.remove(handle);
       handle.geometry.dispose();
       (handle.material as THREE.Material).dispose();
     }
@@ -595,7 +515,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
-    this.raycaster.setFromCamera(mouse, this.camera);
+    this.raycaster.setFromCamera(mouse, this.threeRender.camera);
     const intersects = this.raycaster.intersectObjects(this.vertexHandles);
     if (intersects.length > 0) {
       this.draggingHandleIndex = this.vertexHandles.indexOf(intersects[0].object as THREE.Mesh);
@@ -626,15 +546,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     if (!this.editMode) return;
     this.draggingHandleIndex = null;
   }
-
-  private animate = () => {
-    if (this.controls) this.controls.update();
-    if (this.renderer && this.scene && this.camera) {
-      this.renderer.render(this.scene, this.camera);
-    }
-    this.animationId = requestAnimationFrame(this.animate);
-  };
-
+  
   private updateRoomMeshAndWalls(roomIndex: number) {
     const mesh = this.roomMeshes[roomIndex];
     const indices = this.roomVertexIndices[roomIndex];
@@ -660,7 +572,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
     // Regenerate walls for this room at the same index
     const oldWalls = this.allWallMeshes[roomIndex] ?? [];
     for (const wall of oldWalls) {
-      this.scene.remove(wall);
+      this.threeRender.scene.remove(wall);
       wall.geometry.dispose();
       (wall.material as THREE.Material).dispose();
     }
@@ -712,13 +624,13 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private rebuildFromData(data: any) {
     // Clear current scene
     for (const mesh of this.roomMeshes) {
-      this.scene.remove(mesh);
+      this.threeRender.scene.remove(mesh);
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
     for (const wallArr of this.allWallMeshes) {
       for (const wall of wallArr) {
-        this.scene.remove(wall);
+        this.threeRender.scene.remove(wall);
         wall.geometry.dispose();
         (wall.material as THREE.Material).dispose();
       }
@@ -751,7 +663,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.y = 0;
-      this.scene.add(mesh);
+      this.threeRender.scene.add(mesh);
       this.roomMeshes.push(mesh);
       this.generateWallsForRoom(verts, roomColor);
     }
