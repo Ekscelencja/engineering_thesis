@@ -7,6 +7,7 @@ import { ProjectService, ProjectData } from '../services/api/project.service';
 import { ThreeRenderService } from '../services/threejs/three-render.service';
 import { RoomWallService } from '../services/threejs/room-wall.service';
 import { calculatePolygonArea, isNearFirstVertex } from '../utils/geometry-utils';
+import { ProjectIOService } from '../services/api/project-io.service';
 
 @Component({
   selector: 'app-editor',
@@ -33,6 +34,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     public threeRenderService: ThreeRenderService,
     private roomWallService: RoomWallService,
     private projectService: ProjectService,
+    private projectIOService: ProjectIOService
   ) { }
 
   ngAfterViewInit() {
@@ -455,41 +457,6 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.editorStateService.roomMetadata[roomIndex].area = calculatePolygonArea(verts);
   }
 
-  public exportProject() {
-    const data = {
-      globalVertices: this.editorStateService.globalVertices,
-      roomVertexIndices: this.editorStateService.roomVertexIndices,
-      roomMetadata: this.editorStateService.roomMetadata
-    };
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'project.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  // Import project state from a JSON file
-  public importProject(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) return;
-
-    const file = input.files[0];
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(reader.result as string);
-        this.rebuildFromData(data);
-      } catch (e) {
-        alert('Invalid project file.');
-      }
-    };
-    reader.readAsText(file);
-  }
-
   // Restore the editor state from imported data
   private rebuildFromData(data: any) {
     // Clear current scene
@@ -573,5 +540,13 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
   public get selectedRoomMesh() {
     return this.editorStateService.selectedRoomMesh;
+  }
+
+  public exportProject() {
+    this.projectIOService.exportProject();
+  }
+
+  public importProject(event: Event) {
+    this.projectIOService.importProject(event, (data) => this.rebuildFromData(data));
   }
 }
