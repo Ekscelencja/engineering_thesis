@@ -1,6 +1,8 @@
 import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, signal, NgZone, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ProjectService, ProjectData } from '../services/project.service';
+
 // Room metadata interface
 interface RoomMetadata {
   name: string;
@@ -54,7 +56,7 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
   private globalVertices: { x: number, z: number }[] = [];
   private roomVertexIndices: number[][] = []; // Each room: array of indices into globalVertices
 
-  constructor(private ngZone: NgZone, private cdr: ChangeDetectorRef) { }
+  constructor(private ngZone: NgZone, private cdr: ChangeDetectorRef, private projectService: ProjectService) { }
 
   ngAfterViewInit() {
     this.initThree();
@@ -635,5 +637,112 @@ export class ThreeCanvasComponent implements AfterViewInit, OnDestroy {
 
     // Update area in metadata
     this.roomMetadata[roomIndex].area = this.calculatePolygonArea(verts);
+  }
+
+  public exportProject() {
+    const data = {
+      globalVertices: this.globalVertices,
+      roomVertexIndices: this.roomVertexIndices,
+      roomMetadata: this.roomMetadata
+    };
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'project.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Import project state from a JSON file
+  public importProject(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result as string);
+        this.rebuildFromData(data);
+      } catch (e) {
+        alert('Invalid project file.');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Restore the editor state from imported data
+  private rebuildFromData(data: any) {
+    // Clear current scene
+    for (const mesh of this.roomMeshes) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+    }
+    for (const wallArr of this.allWallMeshes) {
+      for (const wall of wallArr) {
+        this.scene.remove(wall);
+        wall.geometry.dispose();
+        (wall.material as THREE.Material).dispose();
+      }
+    }
+    this.roomMeshes = [];
+    this.allWallMeshes = [];
+    this.roomMetadata = [];
+    this.globalVertices = [];
+    this.roomVertexIndices = [];
+    this.selectedRoomMesh = null;
+
+    // Restore data
+    this.globalVertices = data.globalVertices || [];
+    this.roomVertexIndices = data.roomVertexIndices || [];
+    this.roomMetadata = data.roomMetadata || [];
+
+    // Rebuild meshes and walls
+    for (let i = 0; i < this.roomVertexIndices.length; i++) {
+      const indices = this.roomVertexIndices[i];
+      const verts = indices.map(idx => this.globalVertices[idx]);
+      const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
+      const geometry = new THREE.ShapeGeometry(shape);
+      const roomColor = Math.floor(Math.random() * 0xffffff);
+      const material = new THREE.MeshStandardMaterial({
+        color: roomColor,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.75
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = 0;
+      this.scene.add(mesh);
+      this.roomMeshes.push(mesh);
+      this.generateWallsForRoom(verts, roomColor);
+    }
+    this.setCanvasListeners();
+    this.cdr.detectChanges();
+  }
+
+  public saveProjectToServer() {
+    const project: ProjectData = {
+      title: 'My Project', // You can make this dynamic
+      globalVertices: this.globalVertices,
+      roomVertexIndices: this.roomVertexIndices,
+      roomMetadata: this.roomMetadata
+    };
+    this.projectService.saveProject(project).subscribe({
+      next: (saved) => alert('Project saved! ID: ' + saved._id),
+      error: (err) => alert('Save failed: ' + err.message)
+    });
+  }
+
+  // Load project from backend by ID
+  public loadProjectFromServer(id: string) {
+    this.projectService.loadProject(id).subscribe({
+      next: (data) => this.rebuildFromData(data),
+      error: (err) => alert('Load failed: ' + err.message)
+    });
   }
 }
