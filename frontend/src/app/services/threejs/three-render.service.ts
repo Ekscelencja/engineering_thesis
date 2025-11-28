@@ -35,9 +35,9 @@ export class ThreeRenderService {
         this.addGrid();
         this.addAxes();
         //this.addCompass();
-        // this.addAxisLabel('X', 5, 0, 0, 0xff0000);
-        // this.addAxisLabel('Y', 0, 5, 0, 0x00ff00);
-        // this.addAxisLabel('Z', 0, 0, 5, 0x0000ff);
+        this.addAxisLabel('X', 5, 0, 0, 0xff0000);
+        this.addAxisLabel('Y', 0, 5, 0, 0x00ff00);
+        this.addAxisLabel('Z', 0, 0, 5, 0x0000ff);
         this.addLighting();
     }
 

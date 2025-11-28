@@ -1,3 +1,6 @@
+import * as THREE from 'three';
+
+// Shoelace formula for area of polygon (XZ plane)
 export function calculatePolygonArea(vertices: { x: number, z: number }[]): number {
   let area = 0;
   const n = vertices.length;
@@ -9,10 +12,93 @@ export function calculatePolygonArea(vertices: { x: number, z: number }[]): numb
   return Math.abs(area) / 2;
 }
 
-// Check if a point is near the first vertex (for closing polygon)
 export function isNearFirstVertex(point: { x: number, z: number }, first: { x: number, z: number }, threshold = 0.5): boolean {
   const dx = point.x - first.x;
   const dz = point.z - first.z;
-  console.log('Distance to first vertex:', Math.sqrt(dx * dx + dz * dz));
   return Math.sqrt(dx * dx + dz * dz) < threshold;
+}
+
+export function getWorldXZFromPointer(
+  event: PointerEvent,
+  canvas: HTMLCanvasElement,
+  camera: THREE.Camera,
+  raycaster: THREE.Raycaster
+): { x: number, z: number } | null {
+  const rect = canvas.getBoundingClientRect();
+  const mouse = new THREE.Vector2(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -((event.clientY - rect.top) / rect.height) * 2 + 1
+  );
+  raycaster.setFromCamera(mouse, camera);
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // XZ plane at Y=0
+  const intersection = new THREE.Vector3();
+  if (raycaster.ray.intersectPlane(plane, intersection)) {
+    // Optional: snap to grid (1 meter)
+    return {
+      x: Math.round(intersection.x),
+      z: Math.round(intersection.z)
+    };
+  }
+  return null;
+}
+
+export function updateDrawingLine(
+  drawingVertices: { x: number, z: number }[],
+  scene: THREE.Scene,
+  drawingLineRef: { current: THREE.Line | null }
+) {
+  if (drawingLineRef.current) {
+    scene.remove(drawingLineRef.current);
+    drawingLineRef.current.geometry.dispose();
+    (drawingLineRef.current.material as THREE.Material).dispose();
+    drawingLineRef.current = null;
+  }
+  if (drawingVertices.length < 2) return;
+
+  const points = drawingVertices.map((v) => new THREE.Vector3(v.x, 0.01, v.z));
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+  const line = new THREE.Line(geometry, material);
+  scene.add(line);
+  drawingLineRef.current = line;
+}
+
+export function highlightDrawingVertex(
+  position: { x: number, z: number },
+  scene: THREE.Scene,
+  drawingVertexMeshes: THREE.Mesh[]
+) {
+  const geometry = new THREE.SphereGeometry(0.2, 16, 16);
+  const material = new THREE.MeshStandardMaterial({ color: 0xff8800 });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(position.x, 0.1, position.z);
+  scene.add(mesh);
+  drawingVertexMeshes.push(mesh);
+}
+
+export function clearDrawingVertexHighlights(
+  scene: THREE.Scene,
+  drawingVertexMeshes: THREE.Mesh[]
+) {
+  for (const mesh of drawingVertexMeshes) {
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    (mesh.material as THREE.Material).dispose();
+  }
+  drawingVertexMeshes.length = 0;
+}
+
+export function findOrAddGlobalVertex(
+  v: { x: number, z: number },
+  globalVertices: { x: number, z: number }[],
+  threshold: number = 0.01
+): number {
+  for (let i = 0; i < globalVertices.length; i++) {
+    const gv = globalVertices[i];
+    if (Math.abs(gv.x - v.x) < threshold && Math.abs(gv.z - v.z) < threshold) {
+      return i;
+    }
+  }
+  globalVertices.push({ x: v.x, z: v.z });
+  return globalVertices.length - 1;
 }
