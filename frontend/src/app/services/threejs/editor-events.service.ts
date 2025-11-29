@@ -26,7 +26,7 @@ export class EditorEventsService {
     private editorStateService: EditorStateService,
     private threeRenderService: ThreeRenderService,
     private roomWallService: RoomWallService
-  ) {}
+  ) { }
 
   /** Call this once after canvas is available */
   setCanvasRef(canvasRef: { nativeElement: HTMLCanvasElement }) {
@@ -95,8 +95,10 @@ export class EditorEventsService {
       this.editorStateService.editMode = !this.editorStateService.editMode;
       this.setCanvasListeners();
       if (this.editorStateService.editMode && this.editorStateService.selectedRoomMesh) {
+        this.editorStateService.editingRoomIndex = this.editorStateService.selectedRoomIndex;
         this.roomWallService.showVertexHandles(this.editorStateService.selectedRoomIndex ?? 0);
       } else {
+        this.editorStateService.editingRoomIndex = null;
         this.roomWallService.hideVertexHandles();
       }
     }
@@ -140,10 +142,10 @@ export class EditorEventsService {
         this.threeRenderService.scene,
         this.editorStateService.drawingVertexMeshes
       );
-      updateDrawingLine(
+      this.editorStateService.drawingLine = updateDrawingLine(
         this.editorStateService.drawingVertices,
         this.threeRenderService.scene,
-        { current: this.editorStateService.drawingLine }
+        this.editorStateService.drawingLine
       );
     }
   };
@@ -182,23 +184,14 @@ export class EditorEventsService {
       const indices = this.editorStateService.roomVertexIndices[
         this.editorStateService.editingRoomIndex!
       ];
+      if (!indices) return;
       const globalIdx = indices[this.editorStateService.draggingHandleIndex!];
       this.editorStateService.globalVertices[globalIdx] = { x: point.x, z: point.z };
       this.editorStateService.vertexHandles[
         this.editorStateService.draggingHandleIndex!
       ].position.set(point.x, 0.1, point.z);
       // Update all rooms that use this global vertex
-      for (
-        let roomIdx = 0;
-        roomIdx < this.editorStateService.roomVertexIndices.length;
-        roomIdx++
-      ) {
-        if (
-          this.editorStateService.roomVertexIndices[roomIdx].includes(globalIdx)
-        ) {
-          this.roomWallService.updateRoomMeshAndWalls(roomIdx);
-        }
-      }
+      this.roomWallService.updateAllRoomsUsingVertex(globalIdx);
     }
   };
 

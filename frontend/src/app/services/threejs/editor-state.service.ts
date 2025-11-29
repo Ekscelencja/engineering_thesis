@@ -5,6 +5,7 @@ interface RoomMetadata {
   name: string;
   type: string;
   area: number;
+  color: number;
 }
 
 @Injectable({ providedIn: 'root' })

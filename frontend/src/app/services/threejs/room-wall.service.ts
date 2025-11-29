@@ -14,7 +14,7 @@ export class RoomWallService {
   constructor(
     private editorState: EditorStateService,
     private threeRender: ThreeRenderService
-  ) {}
+  ) { }
 
   // Generate wall meshes for a room
   generateWallsForRoom(
@@ -32,6 +32,7 @@ export class RoomWallService {
       const length = Math.sqrt(dx * dx + dz * dz);
       const angle = Math.atan2(dz, dx);
 
+      // Always create a new wall mesh for each room, never share
       const wallGeometry = new THREE.BoxGeometry(length, wallHeight, wallThickness);
       const wallMaterial = new THREE.MeshStandardMaterial({ color: roomColor });
       const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
@@ -108,31 +109,65 @@ export class RoomWallService {
   }
 
   updateRoomMeshAndWalls(roomIndex: number) {
-    // Remove old mesh and walls
-    this.threeRender.scene.remove(this.editorState.roomMeshes[roomIndex]);
-    for (const wall of this.editorState.allWallMeshes[roomIndex]) {
+    // --- Update only geometry, not mesh/material ---
+    const mesh = this.editorState.roomMeshes[roomIndex];
+    const indices = this.editorState.roomVertexIndices[roomIndex];
+    const verts = indices.map(idx => this.editorState.globalVertices[idx]);
+    const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
+    const newGeometry = new THREE.ShapeGeometry(shape);
+
+    // Update geometry in place
+    if (mesh.geometry) mesh.geometry.dispose();
+    mesh.geometry = newGeometry;
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.01;
+
+    // Update handle positions if this is the currently edited room
+    if (this.editorState.editingRoomIndex === roomIndex) {
+      for (let i = 0; i < verts.length; i++) {
+        if (this.editorState.vertexHandles[i]) {
+          this.editorState.vertexHandles[i].position.set(verts[i].x, 0.1, verts[i].z);
+        }
+      }
+    }
+
+    // Update color if needed
+    const roomColor = this.editorState.roomMetadata[roomIndex]?.color ?? 0xcccccc;
+    const mat = mesh.material as THREE.MeshStandardMaterial;
+    mat.color.setHex(roomColor);
+
+    // Highlight if selected
+    if (this.editorState.selectedRoomIndex === roomIndex) {
+      mat.emissive.setHex(0xffff00);
+    } else {
+      mat.emissive.setHex(0x000000);
+    }
+    mat.needsUpdate = true;
+
+    // --- Remove old walls before creating new ones ---
+    for (const wall of this.editorState.allWallMeshes[roomIndex] || []) {
       this.threeRender.scene.remove(wall);
       wall.geometry.dispose();
       (wall.material as THREE.Material).dispose();
     }
-    // Create new mesh and walls
-    const indices = this.editorState.roomVertexIndices[roomIndex];
-    const verts = indices.map(idx => this.editorState.globalVertices[idx]);
-    const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
-    const geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshStandardMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.y = 0.01;
-    mesh.rotation.x = -Math.PI / 2; // Ensure floor is on XZ plane
-    this.threeRender.scene.add(mesh);
-    this.editorState.roomMeshes[roomIndex] = mesh;
+    this.editorState.allWallMeshes[roomIndex] = [];
 
-    // Walls
-    const walls = this.generateWallsForRoom(verts, 0x888888);
+    // --- Always create new wall meshes for this room only ---
+    const walls = this.generateWallsForRoom(verts, roomColor);
     this.editorState.allWallMeshes[roomIndex] = walls;
 
     // Update area
     this.editorState.roomMetadata[roomIndex].area = calculatePolygonArea(verts);
+  }
+
+  // Update all rooms that use a given global vertex index
+  updateAllRoomsUsingVertex(globalVertexIdx: number) {
+    for (let roomIdx = 0; roomIdx < this.editorState.roomVertexIndices.length; roomIdx++) {
+      if (this.editorState.roomVertexIndices[roomIdx].includes(globalVertexIdx)) {
+        console.log(`Updating room ${roomIdx} due to vertex ${globalVertexIdx} change`);
+        this.updateRoomMeshAndWalls(roomIdx);
+      }
+    }
   }
 
   rebuildFromData(data: any) {
@@ -154,6 +189,7 @@ export class RoomWallService {
     this.editorState.roomMetadata = [];
     this.editorState.globalVertices = [];
     this.editorState.roomVertexIndices = [];
+    this.editorState.selectedRoomMesh = null;
 
     // Restore from data
     this.editorState.globalVertices = data.globalVertices || [];
@@ -165,14 +201,16 @@ export class RoomWallService {
       const verts = indices.map(idx => this.editorState.globalVertices[idx]);
       const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
       const geometry = new THREE.ShapeGeometry(shape);
-      const material = new THREE.MeshStandardMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
+      const roomColor = this.editorState.roomMetadata[i]?.color ?? 0xcccccc;
+      const material = new THREE.MeshStandardMaterial({ color: roomColor, side: THREE.DoubleSide, emissive: 0x000000 });
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.y = 0.01;
       mesh.rotation.x = -Math.PI / 2; // Ensure floor is on XZ plane
       this.threeRender.scene.add(mesh);
       this.editorState.roomMeshes.push(mesh);
 
-      const walls = this.generateWallsForRoom(verts, 0x888888);
+      // Always create new wall meshes for each room
+      const walls = this.generateWallsForRoom(verts, roomColor);
       this.editorState.allWallMeshes.push(walls);
     }
   }
@@ -193,22 +231,24 @@ export class RoomWallService {
     const verts = indices.map(idx => this.editorState.globalVertices[idx]);
     const shape = new THREE.Shape(verts.map(v => new THREE.Vector2(v.x, -v.z)));
     const geometry = new THREE.ShapeGeometry(shape);
-    const material = new THREE.MeshStandardMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
+    const randomColor = Math.floor(Math.random() * 0xffffff);
+    const material = new THREE.MeshStandardMaterial({ color: randomColor, side: THREE.DoubleSide, emissive: 0x000000 });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.y = 0.01;
     mesh.rotation.x = -Math.PI / 2; // Ensure floor is on XZ plane
     this.threeRender.scene.add(mesh);
     this.editorState.roomMeshes.push(mesh);
 
-    // Create walls
-    const walls = this.generateWallsForRoom(verts, 0x888888);
+    // Always create new wall meshes for this room
+    const walls = this.generateWallsForRoom(verts, randomColor);
     this.editorState.allWallMeshes.push(walls);
 
-    // Add metadata
+    // Add metadata (now with color)
     this.editorState.roomMetadata.push({
       name: `Room ${this.editorState.roomMetadata.length + 1}`,
       type: 'Generic',
-      area: calculatePolygonArea(verts)
+      area: calculatePolygonArea(verts),
+      color: randomColor
     });
 
     // Reset drawing state

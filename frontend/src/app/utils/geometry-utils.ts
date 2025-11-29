@@ -45,22 +45,22 @@ export function getWorldXZFromPointer(
 export function updateDrawingLine(
   drawingVertices: { x: number, z: number }[],
   scene: THREE.Scene,
-  drawingLineRef: { current: THREE.Line | null }
-) {
-  if (drawingLineRef.current) {
-    scene.remove(drawingLineRef.current);
-    drawingLineRef.current.geometry.dispose();
-    (drawingLineRef.current.material as THREE.Material).dispose();
-    drawingLineRef.current = null;
+  drawingLine: THREE.Line | null
+): THREE.Line | null {
+  if (drawingLine) {
+    scene.remove(drawingLine);
+    drawingLine.geometry.dispose();
+    (drawingLine.material as THREE.Material).dispose();
+    drawingLine = null;
   }
-  if (drawingVertices.length < 2) return;
+  if (drawingVertices.length < 2) return null;
 
   const points = drawingVertices.map((v) => new THREE.Vector3(v.x, 0.01, v.z));
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
   const line = new THREE.Line(geometry, material);
   scene.add(line);
-  drawingLineRef.current = line;
+  return line;
 }
 
 export function highlightDrawingVertex(
