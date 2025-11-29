@@ -3,10 +3,10 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
 import { input } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { AuthService } from '../services/auth.service';
+import { AuthService } from '../services/api/auth.service';
 import { signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { SessionService } from '../services/session.service';
+import { SessionService } from '../services/api/session.service';
 
 @Component({
   selector: 'auth-panel',
