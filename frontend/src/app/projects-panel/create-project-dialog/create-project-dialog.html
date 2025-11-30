@@ -1,0 +1,23 @@
+<div class="create-project-dialog-wrapper">
+    <h2 mat-dialog-title>Create New Project</h2>
+    <div mat-dialog-content>
+        <mat-form-field appearance="fill" style="width: 100%;">
+            <mat-label>Project title</mat-label>
+            <input matInput [(ngModel)]="newProjectTitle" [disabled]="creating" />
+        </mat-form-field>
+        <mat-form-field appearance="fill" style="width: 100%;">
+            <mat-label>Client</mat-label>
+            <mat-select [(ngModel)]="selectedClientId" [disabled]="clientsLoading || creating">
+                <mat-option value="" disabled>Select client</mat-option>
+                <mat-option *ngFor="let client of clients" [value]="client._id">
+                    {{ client.name }} ({{ client.email }})
+                </mat-option>
+            </mat-select>
+        </mat-form-field>
+        <div *ngIf="createError" class="error">{{ createError }}</div>
+    </div>
+    <div mat-dialog-actions class="action-buttons">
+        <button mat-button (click)="onCancel()" [disabled]="creating">Cancel</button>
+        <button mat-flat-button color="primary" (click)="onCreate()" [disabled]="creating">Create</button>
+    </div>
+</div>

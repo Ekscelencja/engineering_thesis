@@ -16,7 +16,7 @@
         height: 2px;
         border-radius: 2px;
         transition: all 0.2s;
-        background-color: var(--mat-sys-primary, #a900a9);
+        background-color: var(--mat-sys-primary);
         opacity: 0.9;
         margin-top: calc(33% - 2px);
         top: calc((33% - 2px) / -2);
@@ -61,6 +61,18 @@
         fill: var(--mat-sys-primary) !important;
         opacity: 0.9;
     }
+}
+
+.current-page {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2rem;
+    color: var(--mat-sys-on-surface);
+    opacity: 0.9;
+    margin: 0;
+    line-height: 2rem;
 }
 
 .navbar-panel {

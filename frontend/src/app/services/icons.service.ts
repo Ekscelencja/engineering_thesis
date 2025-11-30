@@ -12,7 +12,11 @@ export class IconsService {
     'feedback',
     'assets',
     'dark-mode',
-    'light-mode'
+    'light-mode',
+    'archive',
+    'edit',
+    'delete',
+    'view',
     // Add more icon names as needed (without .svg extension)
   ];
 

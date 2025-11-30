@@ -7,6 +7,7 @@
 	<button color="primary" (click)="toggleTheme()" class="mode-toggle-btn">
 		<mat-icon svgIcon="{{ themeService.currentTheme === 'dark' ? 'dark-mode' : 'light-mode' }}" class="nav-icon" aria-hidden="true"></mat-icon>
 	</button>
+	<h1 class="current-page">{{ currentLocalization }}</h1>
 	<nav class="navbar-panel" [class.expanded]="expanded()" [class.hidden]="!expanded()">
 		<ul class="nav-links">
 			<li *ngFor="let link of navLinks">
