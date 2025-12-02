@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, NgZone, ChangeDetectorRef } from '@angular/core';
+import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, NgZone, ChangeDetectorRef, Input, SimpleChanges, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EditorStateService } from '../services/threejs/editor-state.service';
@@ -7,18 +7,27 @@ import { ThreeRenderService } from '../services/threejs/three-render.service';
 import { RoomWallService } from '../services/threejs/room-wall.service';
 import { ProjectIOService } from '../services/api/project-io.service';
 import { EditorEventsService } from '../services/threejs/editor-events.service';
+import { MatButtonModule } from '@angular/material/button';
 
 @Component({
   selector: 'app-editor',
   standalone: true,
   templateUrl: './editor.html',
   styleUrls: ['./editor.scss'],
-  imports: [CommonModule, FormsModule]
+  imports: [CommonModule, FormsModule, MatButtonModule]
 })
 export class EditorComponent implements AfterViewInit, OnDestroy {
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
 
-  public projectTitle: string = '';
+  isNewProject: boolean = false;
+  clientId: string | null = null;
+  projectTitle: string | null = null;
+  @Input() userType: string | null = null;
+  @Input() projectId: string | null = null;
+  @Input() newProjectClientId: string | null = null;
+  @Input() newProjectTitle: string | null = null;
+  @Input() projectData: Partial<ProjectData> | null = null;
+  @Output() closeEditor = new EventEmitter<void>();
 
   constructor(
     private ngZone: NgZone,
@@ -27,7 +36,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     public threeRenderService: ThreeRenderService,
     private roomWallService: RoomWallService,
     private projectService: ProjectService,
-    private projectIOService: ProjectIOService,
+    //private projectIOService: ProjectIOService,
     public editorEventsService: EditorEventsService
   ) { }
 
@@ -48,6 +57,23 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     });
   }
 
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['projectId'] && this.projectId) {
+      this.projectService.loadProject(this.projectId).subscribe({
+        next: (data) => (
+          this.isNewProject = false,
+          this.roomWallService.rebuildFromData(data),
+          this.projectTitle = data.title,
+          this.clientId = data.client),
+        error: (err) => alert('Load failed: ' + err.message)
+      });
+    }
+    if (changes['newProjectTitle'] && this.newProjectTitle && this.newProjectClientId) {
+      this.isNewProject = true;
+      console.log('Creating new project with title:', this.newProjectTitle, 'and clientId:', this.newProjectClientId);
+    }
+  }
+
   ngOnDestroy() {
     this.threeRenderService.stopAnimation();
     if (this.threeRenderService.renderer) this.threeRenderService.renderer.dispose();
@@ -61,24 +87,33 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   public saveProjectToServer() {
-    const title = this.projectTitle.trim() || 'Untitled Project';
     const project: ProjectData = {
-      title,
+      title: this.isNewProject ? this.newProjectTitle! : this.projectTitle!,
+      client: this.isNewProject ? this.newProjectClientId! : this.clientId!,
       globalVertices: this.editorStateService.globalVertices,
       roomVertexIndices: this.editorStateService.roomVertexIndices,
       roomMetadata: this.editorStateService.roomMetadata
     };
-    this.projectService.saveProject(project).subscribe({
-      next: (saved) => alert('Project saved! ID: ' + saved._id),
-      error: (err) => alert('Save failed: ' + err.message)
-    });
+    if (this.isNewProject) {
+      this.projectService.saveProject(project).subscribe({
+        next: (saved) => (alert('Project saved! ID: ' + saved._id),
+          this.projectId = saved._id!,
+          this.clientId = saved.client!,
+          this.projectTitle = saved.title,
+          this.isNewProject = false
+        ),
+        error: (err) => alert('Save failed: ' + err.message)
+      });
+    } else {
+      this.projectService.updateProject(this.projectId!, project).subscribe({
+        next: (updated) => alert('Project updated! ID: ' + updated._id),
+        error: (err) => alert('Update failed: ' + err.message)
+      });
+    }
   }
-
-  public loadProjectFromServer(id: string) {
-    this.projectService.loadProject(id).subscribe({
-      next: (data) => this.roomWallService.rebuildFromData(data),
-      error: (err) => alert('Load failed: ' + err.message)
-    });
+  
+  public exitEditor() {
+    this.closeEditor.emit();
   }
 
   public get roomMetadata() {
@@ -90,13 +125,5 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   public get selectedRoomIndex() {
     return this.editorStateService.selectedRoomIndex;
-  }
-
-  public exportProject() {
-    this.projectIOService.exportProject();
-  }
-
-  public importProject(event: Event) {
-    this.projectIOService.importProject(event, (data) => this.roomWallService.rebuildFromData(data));
   }
 }

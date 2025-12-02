@@ -1,15 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, TemplateRef, ViewChild } from '@angular/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { CreateProjectDialogComponent } from './create-project-dialog/create-project-dialog.component';
 import { EditorComponent } from '../app-editor/editor';
 import { ProjectService, ProjectData } from '../services/api/project.service';
 import { SessionService } from '../services/api/session.service';
-import { AuthService } from '../services/api/auth.service';
 import { IconsService } from '../services/icons.service';
 
 
@@ -19,11 +18,11 @@ import { IconsService } from '../services/icons.service';
   imports: [
     EditorComponent,
     CommonModule,
-    MatTableModule, 
-    MatButtonModule, 
-    MatIconModule, 
-    MatTooltipModule, 
-    MatDialogModule, 
+    MatTableModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTooltipModule,
+    MatDialogModule,
     CreateProjectDialogComponent
   ],
   templateUrl: './projects-panel.html',
@@ -36,20 +35,29 @@ export class ProjectsPanelComponent implements OnInit {
 
   // Dialog-related state removed (handled in dialog)
   showEditorOnly = signal<boolean>(false);
-  createdProject: ProjectData | null = null;
   displayedColumns: string[] = [];
   icons = inject(IconsService);
+  selectedProjectId: string | null = null;
+  newProjectTitle: string | null = null;
+  newProjectClientId: string | null = null;
+  userType: string | null = null;
+
+  @ViewChild('editorRef') editorRef?: EditorComponent;
+  @ViewChild('confirmDialog') confirmDialogTpl!: TemplateRef<any>;
+
+  public confirmDialogRef: MatDialogRef<any> | null = null;
+  confirmDialogData: { title: string; question: string; confirmText: string; color: string; onConfirm: () => void } | null = null;
 
   constructor(
     private projectService: ProjectService,
     public session: SessionService,
-    private authService: AuthService,
     private dialog: MatDialog
   ) { }
 
   ngOnInit() {
-    this.fetchProjects();
     this.session.loadSession();
+    this.userType = this.session.user()?.role || null;
+    this.fetchProjects();
     this.setDisplayedColumns();
   }
 
@@ -82,7 +90,6 @@ export class ProjectsPanelComponent implements OnInit {
 
   }
 
-
   openCreateProjectDialog() {
     const dialogRef = this.dialog.open(CreateProjectDialogComponent, {
       width: '400px',
@@ -90,29 +97,77 @@ export class ProjectsPanelComponent implements OnInit {
     });
     dialogRef.afterClosed().subscribe((result) => {
       if (result) {
-        // Project created, refresh list and show editor
-        this.fetchProjects();
+        this.newProjectTitle = result.title;
+        this.newProjectClientId = result.clientId;
         this.showEditorOnly.set(true);
-        this.createdProject = result;
       }
     });
   }
 
   // (create/cancel logic now handled in dialog)
-
   editProject(project: ProjectData) {
-    // Architect: Logic to edit a project
-    console.log('Edit project', project);
+    this.selectedProjectId = project._id || null;
+    this.showEditorOnly.set(true);
   }
 
   archiveProject(project: ProjectData) {
-    // Architect: Logic to archive a project
-    console.log('Archive project', project);
+    this.confirmDialogData = {
+      title: 'Archive Project',
+      question: `Are you sure you want to archive "${project.title}"?`,
+      confirmText: 'Archive',
+      color: 'accent',
+      onConfirm: () => {
+        this.loading.set(true);
+        this.projectService.archiveProject(project._id!).subscribe({
+          next: () => {
+            this.fetchProjects();
+            this.loading.set(false);
+          },
+          error: () => {
+            this.error.set('Failed to archive project');
+            this.loading.set(false);
+          }
+        });
+      }
+    };
+    this.confirmDialogRef = this.dialog.open(this.confirmDialogTpl);
+    this.confirmDialogRef.afterClosed().subscribe((result: any) => {
+      if (result === true && this.confirmDialogData) {
+        this.confirmDialogData.onConfirm();
+      }
+      this.confirmDialogData = null;
+      this.confirmDialogRef = null;
+    });
   }
 
   deleteProject(project: ProjectData) {
-    // Architect: Logic to delete a project
-    console.log('Delete project', project);
+    this.confirmDialogData = {
+      title: 'Delete Project',
+      question: `Are you sure you want to delete "${project.title}"? This action cannot be undone!`,
+      confirmText: 'Delete',
+      color: 'warn',
+      onConfirm: () => {
+        this.loading.set(true);
+        this.projectService.deleteProject(project._id!).subscribe({
+          next: () => {
+            this.fetchProjects();
+            this.loading.set(false);
+          },
+          error: () => {
+            this.error.set('Failed to delete project');
+            this.loading.set(false);
+          }
+        });
+      }
+    };
+    this.confirmDialogRef = this.dialog.open(this.confirmDialogTpl);
+    this.confirmDialogRef.afterClosed().subscribe((result: any) => {
+      if (result === true && this.confirmDialogData) {
+        this.confirmDialogData.onConfirm();
+      }
+      this.confirmDialogData = null;
+      this.confirmDialogRef = null;
+    });
   }
 
   viewProject(project: ProjectData) {

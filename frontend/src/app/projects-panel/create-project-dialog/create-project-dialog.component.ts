@@ -61,23 +61,7 @@ export class CreateProjectDialogComponent {
       this.createError = 'Please select a client.';
       return;
     }
-    this.creating = true;
-    this.projectService.saveProject({
-      title,
-      globalVertices: [],
-      roomVertexIndices: [],
-      roomMetadata: [],
-      clientId
-    } as any).subscribe({
-      next: (project) => {
-        this.creating = false;
-        this.dialogRef.close(project);
-      },
-      error: () => {
-        this.createError = 'Failed to create project';
-        this.creating = false;
-      }
-    });
+    this.dialogRef.close({ title, clientId });
   }
 
   onCancel() {
