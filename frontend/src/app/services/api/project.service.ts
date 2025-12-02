@@ -1,10 +1,11 @@
-import { Injectable } from '@angular/core';
+  import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 export interface ProjectData {
   _id?: string;
   title: string;
+  client: string;
   globalVertices: { x: number; z: number }[];
   roomVertexIndices: number[][];
   roomMetadata: { name: string; type: string; area: number }[];
@@ -30,5 +31,13 @@ export class ProjectService {
 
   getProjects(): Observable<ProjectData[]> {
     return this.http.get<ProjectData[]>(this.apiUrl);
+  }
+  
+  archiveProject(id: string): Observable<any> {
+    return this.http.patch(`${this.apiUrl}/${id}/archive`, {});
+  }
+
+  deleteProject(id: string): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/${id}`);
   }
 }

@@ -12,11 +12,13 @@ export class SessionService {
   token = signal<string | null>(localStorage.getItem('token'));
   user = signal<SessionUser | null>(null);
 
-  setSession(token: string, user: SessionUser) {
+  setSession(token: string, user: any) {
     this.token.set(token);
-    this.user.set(user);
+    // Remove password if present
+    const { password, ...safeUser } = user;
+    this.user.set(safeUser);
     localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('user', JSON.stringify(safeUser));
   }
 
   clearSession() {

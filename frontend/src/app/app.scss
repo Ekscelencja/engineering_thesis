@@ -1,13 +1,10 @@
-@use 'material-palette' as palette;
-
+body,
 .main-content {
 	min-height: 100vh;
-	background: palette.$gray-800;
-}
-
-@media (max-width: 600px) {
-	.main-content {
-		margin-left: 0;
-		padding: 1rem;
-	}
+	background: var(--mat-sys-background);
+	color: var(--mat-sys-on-background);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 }

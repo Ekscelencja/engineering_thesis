@@ -1,18 +1,10 @@
 <canvas #canvas class="three-canvas"></canvas>
 
-<!-- Export/Import Project Buttons -->
-<div
-	style="position:fixed;top:0;left:220px;z-index:9999;background:#fff;color:#000;padding:8px;border:1px solid #ccc;max-width:400px;">
-	<button (click)="exportProject()">Export Project (JSON)</button>
-	<label style="margin-left:10px;">
-		Import Project (JSON)
-		<input type="file" accept="application/json" (change)="importProject($event)" style="display:inline-block;" />
-	</label>
-	<input type="text" [(ngModel)]="projectTitle" placeholder="Project Title" style="margin-left:10px;" />
-	<button (click)="saveProjectToServer()">Save to Server</button>
-	<!-- For loading, you can use an input for the project ID: -->
-	<input #projId type="text" placeholder="Project ID" />
-	<button (click)="loadProjectFromServer(projId.value)">Load from Server</button>
+<div class="editor-action-buttons">
+	<button *ngIf="userType === 'architect'" mat-flat-button class="save-project-button"
+		(click)="saveProjectToServer()">Save project</button>
+	<button *ngIf="userType === 'architect'" mat-flat-button class="close-editor-button" (click)="exitEditor()">Close
+		editor</button>
 </div>
 
 <!-- Room Metadata Sidebar -->

@@ -1,98 +1,149 @@
-@use 'material-palette' as palette;
-
 .toggle-btn {
-	display: block;
-	width: 32px;
-	height: 32px;
-	position: fixed;
-	top: 1rem;
-	left: 1rem;
-	cursor: pointer;
-	z-index: 999;
-	background: none;
-	border: none;
+    display: block;
+    width: 32px;
+    height: 32px;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    cursor: pointer;
+    z-index: 999;
+    background: none;
+    border: none;
 
-	span {
-		display: block;
-		position: relative;
-		width: 100%;
-		height: 2px;
-		border-radius: 2px;
-		transition: all 0.2s ease;
-		background-color: palette.$white;
-		opacity: 90%;
-		margin-top: 22%;
-		margin-top: calc(33% - 2px);
-		top: calc((33% - 2px) / -2);
-	}
+    span {
+        display: block;
+        width: 100%;
+        height: 2px;
+        border-radius: 2px;
+        transition: all 0.2s;
+        background-color: var(--mat-sys-primary);
+        opacity: 0.9;
+        margin-top: calc(33% - 2px);
+        top: calc((33% - 2px) / -2);
+        position: relative;
+    }
 
-	&.toggled {
-		span {
-			&:nth-child(1) {
-				top: calc(50% - 33% - 2px);
-				transform: rotate(45deg);
-			}
+    &.toggled {
+        span {
+            &:nth-child(1) {
+                top: calc(50% - 33% - 2px);
+                transform: rotate(45deg);
+            }
 
-			&:nth-child(2) {
-				opacity: 0;
-			}
+            &:nth-child(2) {
+                opacity: 0;
+            }
 
-			&:nth-child(3) {
-				top: calc(-50% + 2px);
-				transform: rotate(-45deg);
-			}
-		}
-	}
+            &:nth-child(3) {
+                top: calc(-50% + 2px);
+                transform: rotate(-45deg);
+            }
+        }
+    }
+}
+
+.mode-toggle-btn {
+    display: block;
+    width: 32px;
+    height: 32px;
+    position: fixed;
+    top: 1rem;
+    left: 4.5rem;
+    cursor: pointer;
+    z-index: 999;
+    background: none;
+    border: none;
+    padding: 0;
+
+    .nav-icon {
+        width: 24px;
+        height: 24px;
+        fill: var(--mat-sys-primary) !important;
+        opacity: 0.9;
+    }
+}
+
+.current-page {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2rem;
+    color: var(--mat-sys-on-surface);
+    opacity: 0.9;
+    margin: 0;
+    line-height: 2rem;
 }
 
 .navbar-panel {
-	position: fixed;
-	top: 0;
-	left: 0;
-	height: 100vh;
-	background: palette.$gray-900;
-	color: palette.$white;
-	width: 220px;
-	transition: width 0.2s, left 0.2s;
-	z-index: 99;
-	display: flex;
-	flex-direction: column;
-	box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 220px;
+    background: var(--mat-sys-surface-container-low);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+    z-index: 99;
+    transition: width 0.2s, left 0.2s;
+    border-right: 2px solid var(--mat-sys-primary);
 
-	&.hidden {
-		width: 0;
-		overflow: hidden;
-		left: -220px;
-	}
+    &.hidden {
+        width: 0;
+        overflow: hidden;
+        left: -220px;
+    }
 
-	.nav-links {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		width: 100%;
-		margin-top: 4rem;
+    .nav-links {
+        list-style: none;
+        padding: 0;
+        margin: 4rem 0 0 0;
+        width: 100%;
 
-		li {
-			margin: 0.5rem 0;
-		}
+        li {
+            margin: 0.5rem 0;
+        }
 
-		a {
-			display: flex;
-			align-items: center;
-			color: #fff;
-			text-decoration: none;
-			padding: 0.75rem 1.5rem;
-			border-radius: 4px 0 0 4px;
-			transition: background 0.2s;
+        a {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--mat-sys-primary);
+            text-decoration: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.25rem 0 0 0.25rem;
+            transition: background 0.2s;
 
-			&.active, &:hover {
-				background: #444;
-			}
-		}
-	}
+            .nav-icon {
+                svg {
+                    fill: var(--mat-sys-primary) !important;
+                }
+            }
 
-	.label {
-		font-size: 1rem;
-		// Add any additional styles for the label here
-	}
+            &.active,
+            &:hover {
+                background: var(--mat-sys-secondary-container);
+                color: var(--mat-sys-on-secondary-container);
+
+                .nav-icon {
+                    svg {
+                        fill: var(--mat-sys-on-secondary-container) !important;
+                    }
+                }
+            }
+        }
+    }
+
+    .label {
+        font-size: 1rem;
+    }
+
+    .logout-button {
+        margin-top: auto;
+        border-radius: 0;
+        justify-content: flex-start;
+        margin-bottom: 1rem;
+        padding-left: 1.5rem;
+    }
 }

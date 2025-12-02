@@ -1,17 +1,36 @@
-<div class="auth-container">
+<mat-card class="auth-container">
   <h2>{{ isLogin() ? 'Login' : 'Register' }}</h2>
   <form [formGroup]="form" (ngSubmit)="onSubmit()">
-    <input formControlName="email" placeholder="Email" type="email" required />
-    <input formControlName="password" placeholder="Password" type="password" required />
+    <mat-form-field appearance="fill" class="full-width">
+      <mat-label>Email</mat-label>
+      <input matInput formControlName="email" type="email" required />
+      <mat-error *ngIf="form.get('email')?.hasError('required')">Email is required</mat-error>
+      <mat-error *ngIf="form.get('email')?.hasError('email')">Invalid email</mat-error>
+    </mat-form-field>
+    <mat-form-field appearance="fill" class="full-width">
+      <mat-label>Password</mat-label>
+      <input matInput formControlName="password" type="password" required />
+      <mat-error *ngIf="form.get('password')?.hasError('required')">Password is required</mat-error>
+    </mat-form-field>
     <ng-container *ngIf="!isLogin()">
-      <input formControlName="name" placeholder="Name" type="text" required />
-      <select formControlName="role">
-        <option value="architect">Architect</option>
-        <option value="client">Client</option>
-      </select>
+      <mat-form-field appearance="fill" class="full-width">
+        <mat-label>Name</mat-label>
+        <input matInput formControlName="name" type="text" required />
+      </mat-form-field>
+      <mat-form-field appearance="fill" class="full-width">
+        <mat-label>Role</mat-label>
+        <mat-select formControlName="role">
+          <mat-option value="architect">Architect</mat-option>
+          <mat-option value="client">Client</mat-option>
+        </mat-select>
+      </mat-form-field>
     </ng-container>
-    <button type="submit">{{ isLogin() ? 'Login' : 'Register' }}</button>
+    <button mat-raised-button color="primary" type="submit" class="full-width action-button">
+      {{ isLogin() ? 'Login' : 'Register' }}
+    </button>
   </form>
-  <button (click)="toggleMode()">Switch to {{ isLogin() ? 'Register' : 'Login' }}</button>
+  <button mat-button color="accent" (click)="toggleMode()" class="full-width switch-button">
+    Switch to {{ isLogin() ? 'Register' : 'Login' }}
+  </button>
   <div *ngIf="error()" class="error">{{ error() }}</div>
-</div>
+</mat-card>

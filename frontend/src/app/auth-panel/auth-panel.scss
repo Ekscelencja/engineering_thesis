@@ -1,2 +1,21 @@
-.auth-container { max-width: 400px; margin: auto; padding: 2rem; }
-.error { color: red; }
+:host {
+    margin: auto;
+}
+
+.auth-container {
+    padding: 16px;
+    max-width: fit-content;
+    border: 2px solid var(--mat-sys-primary);
+
+    form {
+        width: 300px;
+        margin: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .action-button {
+        margin-bottom: 16px;
+    }
+}

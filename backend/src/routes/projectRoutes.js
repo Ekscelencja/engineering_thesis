@@ -11,6 +11,8 @@ router.get('/', auth, projectController.getProjects);
 router.get('/:id', auth, projectController.getProject);
 // Update project
 router.put('/:id', auth, projectController.updateProject);
+// Archive project
+router.patch('/:id/archive', auth, projectController.archiveProject);
 // Delete project
 router.delete('/:id', auth, projectController.deleteProject);
 // Add feedback/comment
