@@ -8,6 +8,7 @@ import { RoomWallService } from '../services/threejs/room-wall.service';
 import { ProjectIOService } from '../services/api/project-io.service';
 import { EditorEventsService } from '../services/threejs/editor-events.service';
 import { MatButtonModule } from '@angular/material/button';
+import * as THREE from 'three';
 
 @Component({
   selector: 'app-editor',
@@ -32,7 +33,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   constructor(
     private ngZone: NgZone,
     private cdr: ChangeDetectorRef,
-    private editorStateService: EditorStateService,
+    protected editorStateService: EditorStateService,
     public threeRenderService: ThreeRenderService,
     private roomWallService: RoomWallService,
     private projectService: ProjectService,
@@ -111,7 +112,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       });
     }
   }
-  
+
   public exitEditor() {
     this.closeEditor.emit();
   }
@@ -125,5 +126,13 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   public get selectedRoomIndex() {
     return this.editorStateService.selectedRoomIndex;
+  }
+
+  startPlacingFeature(type: 'window' | 'door') {
+    this.editorStateService.placingFeatureType = type;
+  }
+
+  onCanvasClick(event: MouseEvent) {
+    this.editorEventsService.handleWallClick(event);
   }
 }

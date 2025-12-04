@@ -1,4 +1,4 @@
-import { Injectable, NgZone, ChangeDetectorRef } from '@angular/core';
+import { Injectable, NgZone } from '@angular/core';
 import * as THREE from 'three';
 import { EditorStateService } from './editor-state.service';
 import { ThreeRenderService } from './three-render.service';
@@ -10,6 +10,7 @@ import {
   highlightDrawingVertex,
   clearDrawingVertexHighlights
 } from '../../utils/geometry-utils';
+import { WallFeature } from '../../models/room-feature.model';
 
 @Injectable({ providedIn: 'root' })
 export class EditorEventsService {
@@ -201,7 +202,12 @@ export class EditorEventsService {
   };
 
   onRoomSelect = (event: PointerEvent) => {
-    if (this.editorStateService.ctrlPressed || this.editorStateService.meshDrawingActive) return;
+    console.log('[onRoomSelect] called, placingFeatureType:', this.editorStateService.placingFeatureType);
+    if (
+      this.editorStateService.ctrlPressed ||
+      this.editorStateService.meshDrawingActive ||
+      this.editorStateService.placingFeatureType // Block selection if placing feature
+    ) return;
     const rect = this.canvasRef.nativeElement.getBoundingClientRect();
     const mouse = new THREE.Vector2(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -213,4 +219,66 @@ export class EditorEventsService {
       this.roomWallService.onRoomSelect(intersects, this.editorStateService.roomMeshes);
     });
   };
+
+  handleWallClick(event: MouseEvent) {
+    console.log('[handleWallClick] called, placingFeatureType:', this.editorStateService.placingFeatureType);
+
+    if (!this.editorStateService.placingFeatureType) {
+      // Not in placement mode, let room selection run
+      this.onRoomSelect(event as any);
+      return;
+    }
+
+    const canvas = this.canvasRef.nativeElement;
+    const mouse = new THREE.Vector2(
+      (event.offsetX / canvas.width) * 2 - 1,
+      -(event.offsetY / canvas.height) * 2 + 1
+    );
+    this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
+
+    const wallMeshes = this.editorStateService.allWallMeshes.flat();
+    const intersects = this.raycaster.intersectObjects(wallMeshes);
+
+    console.log('[handleWallClick] wallMeshes:', wallMeshes.length, 'intersects:', intersects.length);
+
+    if (intersects.length > 0) {
+      const mesh = intersects[0].object;
+      const { wallIdx } = mesh.userData;
+      const roomIdx = this.editorStateService.selectedRoomIndex;
+      console.log('[handleWallClick] Clicked wallIdx:', wallIdx, 'roomIdx:', roomIdx);
+
+      if (
+        roomIdx == null ||
+        !this.editorStateService.roomVertexIndices ||
+        !this.editorStateService.roomVertexIndices[roomIdx]
+      ) {
+        console.warn('No room vertices found for roomIdx:', roomIdx);
+        return;
+      }
+      const verts = this.editorStateService.roomVertexIndices[roomIdx].map(idx => this.editorStateService.globalVertices[idx]);
+      const startV = verts[wallIdx];
+      const endV = verts[(wallIdx + 1) % verts.length];
+      const point = intersects[0].point;
+      const wallVec = new THREE.Vector2(endV.x - startV.x, endV.z - startV.z);
+      const clickVec = new THREE.Vector2(point.x - startV.x, point.z - startV.z);
+      const clickPosition = wallVec.length() > 0 ? (clickVec.dot(wallVec) / wallVec.lengthSq()) : 0.5;
+
+      // Place the feature
+      const feature: WallFeature = {
+        type: this.editorStateService.placingFeatureType,
+        position: clickPosition,
+        width: this.editorStateService.placingFeatureType === 'window' ? 1 : 0.9,
+        height: this.editorStateService.placingFeatureType === 'window' ? 1.2 : 2.0
+      };
+      const roomMeta = this.editorStateService.roomMetadata[roomIdx];
+      if (!roomMeta.wallFeatures) roomMeta.wallFeatures = [];
+      if (!roomMeta.wallFeatures[wallIdx]) roomMeta.wallFeatures[wallIdx] = [];
+      roomMeta.wallFeatures[wallIdx].push(feature);
+      this.roomWallService.updateWallFeatures(roomIdx, wallIdx, roomMeta.wallFeatures[wallIdx]);
+      this.editorStateService.placingFeatureType = null; // Exit placement mode
+      console.log('[handleWallClick] Feature placed:', feature);
+    } else {
+      console.log('[handleWallClick] No wall intersected');
+    }
+  }
 }

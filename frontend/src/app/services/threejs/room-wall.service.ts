@@ -1,8 +1,10 @@
+
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { EditorStateService } from './editor-state.service';
 import { ThreeRenderService } from './three-render.service';
 import { calculatePolygonArea, findOrAddGlobalVertex, clearDrawingVertexHighlights } from '../../utils/geometry-utils';
+import { WallFeature } from '../../models/room-feature.model';
 
 @Injectable({
   providedIn: 'root'
@@ -21,7 +23,8 @@ export class RoomWallService {
     vertices: { x: number, z: number }[],
     roomColor: number,
     wallHeight: number = this.wallHeight,
-    wallThickness: number = this.wallThickness
+    wallThickness: number = this.wallThickness,
+    wallFeatures?: WallFeature[][]
   ): THREE.Mesh[] {
     const currentRoomWalls: THREE.Mesh[] = [];
     for (let i = 0; i < vertices.length; i++) {
@@ -32,22 +35,66 @@ export class RoomWallService {
       const length = Math.sqrt(dx * dx + dz * dz);
       const angle = Math.atan2(dz, dx);
 
-      // Always create a new wall mesh for each room, never share
-      const wallGeometry = new THREE.BoxGeometry(length, wallHeight, wallThickness);
-      const wallMaterial = new THREE.MeshStandardMaterial({ color: roomColor });
-      const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
+      // Wall shape with optional holes for features
+      const shape = new THREE.Shape([
+        new THREE.Vector2(0, 0),
+        new THREE.Vector2(length, 0),
+        new THREE.Vector2(length, wallHeight),
+        new THREE.Vector2(0, wallHeight)
+      ]);
+      if (wallFeatures && wallFeatures[i]) {
+        for (const f of wallFeatures[i]) {
+          const hole = new THREE.Path();
+          const x0 = f.position * length - f.width / 2;
+          const x1 = f.position * length + f.width / 2;
+          const y0 = 0.5;
+          const y1 = 0.5 + f.height;
+          hole.moveTo(x0, y0);
+          hole.lineTo(x1, y0);
+          hole.lineTo(x1, y1);
+          hole.lineTo(x0, y1);
+          hole.lineTo(x0, y0);
+          shape.holes.push(hole);
+        }
+      }
+      const geometry = new THREE.ExtrudeGeometry(shape, { depth: wallThickness, bevelEnabled: false });
+      geometry.translate(0, 0, -wallThickness / 2);
 
-      wallMesh.position.set(
-        (startV.x + endV.x) / 2,
-        wallHeight / 2,
-        (startV.z + endV.z) / 2
-      );
+      const material = new THREE.MeshStandardMaterial({ color: roomColor });
+      const wallMesh = new THREE.Mesh(geometry, material);
+
+      // Place at start vertex
+      wallMesh.position.set(startV.x, 0, startV.z);
+
+      // Rotate to align with wall direction
       wallMesh.rotation.y = -angle;
+
+      // Store wall index for identification
+      (wallMesh as any).userData = { wallIdx: i };
 
       this.threeRender.scene.add(wallMesh);
       currentRoomWalls.push(wallMesh);
     }
     return currentRoomWalls;
+  }
+
+  // Proof-of-concept: update features for a wall and re-render
+  updateWallFeatures(roomIdx: number, wallIdx: number, features: WallFeature[]) {
+    const roomMeta = this.editorState.roomMetadata[roomIdx];
+    if (!roomMeta.wallFeatures) roomMeta.wallFeatures = [];
+    roomMeta.wallFeatures[wallIdx] = features;
+    // Re-generate all walls for this room
+    const verts = this.editorState.roomVertexIndices[roomIdx].map(idx => this.editorState.globalVertices[idx]);
+    const color = roomMeta.color ?? 0xcccccc;
+    // Remove old walls
+    for (const wall of this.editorState.allWallMeshes[roomIdx] || []) {
+      this.threeRender.scene.remove(wall);
+      wall.geometry.dispose();
+      (wall.material as THREE.Material).dispose();
+    }
+    // Create new walls with features
+    const walls = this.generateWallsForRoom(verts, color, this.wallHeight, this.wallThickness, roomMeta.wallFeatures);
+    this.editorState.allWallMeshes[roomIdx] = walls;
   }
 
   // Room selection logic
@@ -153,7 +200,7 @@ export class RoomWallService {
     this.editorState.allWallMeshes[roomIndex] = [];
 
     // --- Always create new wall meshes for this room only ---
-    const walls = this.generateWallsForRoom(verts, roomColor);
+    const walls = this.generateWallsForRoom(verts, roomColor, this.wallHeight, this.wallThickness, this.editorState.roomMetadata[roomIndex]?.wallFeatures);
     this.editorState.allWallMeshes[roomIndex] = walls;
 
     // Update area
@@ -210,7 +257,7 @@ export class RoomWallService {
       this.editorState.roomMeshes.push(mesh);
 
       // Always create new wall meshes for each room
-      const walls = this.generateWallsForRoom(verts, roomColor);
+      const walls = this.generateWallsForRoom(verts, roomColor, this.wallHeight, this.wallThickness, this.editorState.roomMetadata[i]?.wallFeatures);
       this.editorState.allWallMeshes.push(walls);
     }
   }
@@ -240,7 +287,7 @@ export class RoomWallService {
     this.editorState.roomMeshes.push(mesh);
 
     // Always create new wall meshes for this room
-    const walls = this.generateWallsForRoom(verts, randomColor);
+    const walls = this.generateWallsForRoom(verts, randomColor, this.wallHeight, this.wallThickness);
     this.editorState.allWallMeshes.push(walls);
 
     // Add metadata (now with color)

@@ -1,16 +1,18 @@
 import { Injectable } from '@angular/core';
+import { WallFeature } from '../../models/room-feature.model';
 import * as THREE from 'three';
 
-interface RoomMetadata {
+export interface RoomMetadata {
   name: string;
   type: string;
   area: number;
   color: number;
+  wallFeatures?: WallFeature[][]; // Array of features per wall
 }
 
 @Injectable({ providedIn: 'root' })
 export class EditorStateService {
-  // Drawing state
+  // Drawing state aa
   public isDrawing = false;
   public meshDrawingActive = false;
   public drawingVertices: { x: number, z: number }[] = [];
@@ -38,4 +40,5 @@ export class EditorStateService {
   public roomMetadata: RoomMetadata[] = [];
   public globalVertices: { x: number, z: number }[] = [];
   public roomVertexIndices: number[][] = [];
+  public placingFeatureType: 'window' | 'door' | null = null;
 }
