@@ -1,4 +1,3 @@
-
 import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { EditorStateService } from './editor-state.service';
@@ -18,37 +17,72 @@ export class RoomWallService {
     private threeRender: ThreeRenderService
   ) { }
 
-  // Generate wall meshes for a room
-  generateWallsForRoom(
-    vertices: { x: number, z: number }[],
+  /**
+   * Generate unique wall meshes for all rooms, merging features for shared walls.
+   * @param allRooms Array of rooms, each with vertices and wallFeatures
+   * @param roomColor Color for the walls
+   */
+  generateWallsForAllRooms(
+    allRooms: { vertices: { x: number, z: number }[], wallFeatures?: WallFeature[][] }[],
     roomColor: number,
     wallHeight: number = this.wallHeight,
-    wallThickness: number = this.wallThickness,
-    wallFeatures?: WallFeature[][]
+    wallThickness: number = this.wallThickness
   ): THREE.Mesh[] {
-    const currentRoomWalls: THREE.Mesh[] = [];
-    for (let i = 0; i < vertices.length; i++) {
-      const startV = vertices[i];
-      const endV = vertices[(i + 1) % vertices.length];
-      const dx = endV.x - startV.x;
-      const dz = endV.z - startV.z;
-      const length = Math.sqrt(dx * dx + dz * dz);
-      const angle = Math.atan2(dz, dx);
+    const wallMeshes: THREE.Mesh[] = [];
+    const wallSegments = new Map<string, { rooms: number[], wallIndices: number[][], features: WallFeature[][] }>();
 
-      // Wall shape with optional holes for features
-      const shape = new THREE.Shape([
-        new THREE.Vector2(0, 0),
-        new THREE.Vector2(length, 0),
-        new THREE.Vector2(length, wallHeight),
-        new THREE.Vector2(0, wallHeight)
-      ]);
-      if (wallFeatures && wallFeatures[i]) {
-        for (const f of wallFeatures[i]) {
+    // 1. Collect all wall segments and their rooms
+    allRooms.forEach((room, roomIdx) => {
+      const verts = room.vertices;
+      for (let i = 0; i < verts.length; i++) {
+        const start = verts[i];
+        const end = verts[(i + 1) % verts.length];
+        const key = `${start.x},${start.z}|${end.x},${end.z}`;
+        const reverseKey = `${end.x},${end.z}|${start.x},${start.z}`;
+        if (!wallSegments.has(key) && !wallSegments.has(reverseKey)) {
+          wallSegments.set(key, { rooms: [roomIdx], wallIndices: [[i]], features: [room.wallFeatures?.[i] || []] });
+        } else if (wallSegments.has(reverseKey)) {
+          const seg = wallSegments.get(reverseKey)!;
+          seg.rooms.push(roomIdx);
+          seg.wallIndices.push([i]);
+          seg.features.push(room.wallFeatures?.[i] || []);
+        }
+      }
+    });
+
+    // 2. Generate each unique wall mesh, merging features
+    for (const [key, seg] of wallSegments.entries()) {
+      // Only generate for one direction (e.g., if first room index is smallest)
+      if (seg.rooms.length === 1 || seg.rooms[0] < seg.rooms[1]) {
+        const [startStr, endStr] = key.split('|');
+        const [x1, z1] = startStr.split(',').map(Number);
+        const [x2, z2] = endStr.split(',').map(Number);
+        const start = { x: x1, z: z1 };
+        const end = { x: x2, z: z2 };
+
+        // Merge features from all rooms sharing this wall
+        const mergedFeatures = ([] as WallFeature[]).concat(...seg.features);
+
+        // --- Wall mesh generation ---
+        const dx = end.x - start.x;
+        const dz = end.z - start.z;
+        const length = Math.sqrt(dx * dx + dz * dz);
+
+        // Create wall shape with holes for features
+        const shape = new THREE.Shape([
+          new THREE.Vector2(0, 0),
+          new THREE.Vector2(length, 0),
+          new THREE.Vector2(length, wallHeight),
+          new THREE.Vector2(0, wallHeight)
+        ]);
+        for (const f of mergedFeatures) {
+          // Default baseHeight: window 1m, door 0m
+          const baseHeight = f.type === 'window' ? 1 : 0;
           const hole = new THREE.Path();
           const x0 = f.position * length - f.width / 2;
           const x1 = f.position * length + f.width / 2;
-          const y0 = 0.5;
-          const y1 = 0.5 + f.height;
+          const y0 = baseHeight;
+          const y1 = baseHeight + f.height;
           hole.moveTo(x0, y0);
           hole.lineTo(x1, y0);
           hole.lineTo(x1, y1);
@@ -56,26 +90,29 @@ export class RoomWallService {
           hole.lineTo(x0, y0);
           shape.holes.push(hole);
         }
+        const geometry = new THREE.ExtrudeGeometry(shape, { depth: wallThickness, bevelEnabled: false });
+
+        const material = new THREE.MeshStandardMaterial({ color: roomColor });
+        const wallMesh = new THREE.Mesh(geometry, material);
+
+        // Place at start vertex
+        wallMesh.position.set(start.x, 0, start.z);
+
+        // Rotate to align with wall direction
+        const angle = Math.atan2(dz, dx);
+        wallMesh.rotation.y = -angle;
+
+        // Store start/end vertices for click handling
+        wallMesh.userData = {
+          startV: start,
+          endV: end,
+          wallKey: key
+        };
+
+        wallMeshes.push(wallMesh);
       }
-      const geometry = new THREE.ExtrudeGeometry(shape, { depth: wallThickness, bevelEnabled: false });
-      geometry.translate(0, 0, -wallThickness / 2);
-
-      const material = new THREE.MeshStandardMaterial({ color: roomColor });
-      const wallMesh = new THREE.Mesh(geometry, material);
-
-      // Place at start vertex
-      wallMesh.position.set(startV.x, 0, startV.z);
-
-      // Rotate to align with wall direction
-      wallMesh.rotation.y = -angle;
-
-      // Store wall index for identification
-      (wallMesh as any).userData = { wallIdx: i };
-
-      this.threeRender.scene.add(wallMesh);
-      currentRoomWalls.push(wallMesh);
     }
-    return currentRoomWalls;
+    return wallMeshes;
   }
 
   // Proof-of-concept: update features for a wall and re-render
@@ -83,18 +120,7 @@ export class RoomWallService {
     const roomMeta = this.editorState.roomMetadata[roomIdx];
     if (!roomMeta.wallFeatures) roomMeta.wallFeatures = [];
     roomMeta.wallFeatures[wallIdx] = features;
-    // Re-generate all walls for this room
-    const verts = this.editorState.roomVertexIndices[roomIdx].map(idx => this.editorState.globalVertices[idx]);
-    const color = roomMeta.color ?? 0xcccccc;
-    // Remove old walls
-    for (const wall of this.editorState.allWallMeshes[roomIdx] || []) {
-      this.threeRender.scene.remove(wall);
-      wall.geometry.dispose();
-      (wall.material as THREE.Material).dispose();
-    }
-    // Create new walls with features
-    const walls = this.generateWallsForRoom(verts, color, this.wallHeight, this.wallThickness, roomMeta.wallFeatures);
-    this.editorState.allWallMeshes[roomIdx] = walls;
+    this.regenerateAllWalls();
   }
 
   // Room selection logic
@@ -118,17 +144,19 @@ export class RoomWallService {
     if (idx === -1) return;
     // Remove mesh and walls from scene
     this.threeRender.scene.remove(this.editorState.roomMeshes[idx]);
-    for (const wall of this.editorState.allWallMeshes[idx]) {
-      this.threeRender.scene.remove(wall);
-      wall.geometry.dispose();
-      (wall.material as THREE.Material).dispose();
+    for (const wallArr of this.editorState.allWallMeshes) {
+      for (const wall of wallArr) {
+        this.threeRender.scene.remove(wall);
+        wall.geometry.dispose();
+        (wall.material as THREE.Material).dispose();
+      }
     }
     // Remove metadata and indices
     this.editorState.roomMeshes.splice(idx, 1);
-    this.editorState.allWallMeshes.splice(idx, 1);
     this.editorState.roomMetadata.splice(idx, 1);
     this.editorState.roomVertexIndices.splice(idx, 1);
     this.editorState.selectedRoomMesh = null;
+    this.regenerateAllWalls();
   }
 
   showVertexHandles(roomIndex: number) {
@@ -191,17 +219,7 @@ export class RoomWallService {
     }
     mat.needsUpdate = true;
 
-    // --- Remove old walls before creating new ones ---
-    for (const wall of this.editorState.allWallMeshes[roomIndex] || []) {
-      this.threeRender.scene.remove(wall);
-      wall.geometry.dispose();
-      (wall.material as THREE.Material).dispose();
-    }
-    this.editorState.allWallMeshes[roomIndex] = [];
-
-    // --- Always create new wall meshes for this room only ---
-    const walls = this.generateWallsForRoom(verts, roomColor, this.wallHeight, this.wallThickness, this.editorState.roomMetadata[roomIndex]?.wallFeatures);
-    this.editorState.allWallMeshes[roomIndex] = walls;
+    this.regenerateAllWalls();
 
     // Update area
     this.editorState.roomMetadata[roomIndex].area = calculatePolygonArea(verts);
@@ -255,11 +273,8 @@ export class RoomWallService {
       mesh.rotation.x = -Math.PI / 2; // Ensure floor is on XZ plane
       this.threeRender.scene.add(mesh);
       this.editorState.roomMeshes.push(mesh);
-
-      // Always create new wall meshes for each room
-      const walls = this.generateWallsForRoom(verts, roomColor, this.wallHeight, this.wallThickness, this.editorState.roomMetadata[i]?.wallFeatures);
-      this.editorState.allWallMeshes.push(walls);
     }
+    this.regenerateAllWalls();
   }
 
   // Handles completion of a polygon (room)
@@ -286,10 +301,6 @@ export class RoomWallService {
     this.threeRender.scene.add(mesh);
     this.editorState.roomMeshes.push(mesh);
 
-    // Always create new wall meshes for this room
-    const walls = this.generateWallsForRoom(verts, randomColor, this.wallHeight, this.wallThickness);
-    this.editorState.allWallMeshes.push(walls);
-
     // Add metadata (now with color)
     this.editorState.roomMetadata.push({
       name: `Room ${this.editorState.roomMetadata.length + 1}`,
@@ -297,6 +308,8 @@ export class RoomWallService {
       area: calculatePolygonArea(verts),
       color: randomColor
     });
+
+    this.regenerateAllWalls();
 
     // Reset drawing state
     this.editorState.isDrawing = false;
@@ -308,5 +321,32 @@ export class RoomWallService {
       this.editorState.drawingLine = null;
     }
     clearDrawingVertexHighlights(this.threeRender.scene, this.editorState.drawingVertexMeshes);
+  }
+  
+  // Helper to regenerate all deduplicated walls after any change
+  regenerateAllWalls() {
+    // Remove all current wall meshes from scene
+    for (const wallArr of this.editorState.allWallMeshes) {
+      for (const wall of wallArr) {
+        this.threeRender.scene.remove(wall);
+        wall.geometry.dispose();
+        (wall.material as THREE.Material).dispose();
+      }
+    }
+    this.editorState.allWallMeshes = [];
+
+    // Prepare allRooms array
+    const allRooms = this.editorState.roomMetadata.map((meta, idx) => ({
+      vertices: this.editorState.roomVertexIndices[idx].map(i => this.editorState.globalVertices[i]),
+      wallFeatures: meta.wallFeatures
+    }));
+    // Use color of first room or default
+    const roomColor = this.editorState.roomMetadata[0]?.color ?? 0xcccccc;
+    const newWallMeshes = this.generateWallsForAllRooms(allRooms, roomColor);
+    this.editorState.allWallMeshes = [newWallMeshes];
+    // Add to scene
+    for (const wall of newWallMeshes) {
+      this.threeRender.scene.add(wall);
+    }
   }
 }

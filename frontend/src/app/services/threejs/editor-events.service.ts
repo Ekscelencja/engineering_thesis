@@ -236,6 +236,7 @@ export class EditorEventsService {
     );
     this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
 
+    // Flatten all wall meshes
     const wallMeshes = this.editorStateService.allWallMeshes.flat();
     const intersects = this.raycaster.intersectObjects(wallMeshes);
 
@@ -243,37 +244,53 @@ export class EditorEventsService {
 
     if (intersects.length > 0) {
       const mesh = intersects[0].object;
-      const { wallIdx } = mesh.userData;
-      const roomIdx = this.editorStateService.selectedRoomIndex;
-      console.log('[handleWallClick] Clicked wallIdx:', wallIdx, 'roomIdx:', roomIdx);
-
-      if (
-        roomIdx == null ||
-        !this.editorStateService.roomVertexIndices ||
-        !this.editorStateService.roomVertexIndices[roomIdx]
-      ) {
-        console.warn('No room vertices found for roomIdx:', roomIdx);
+      // Use startV and endV from userData, not wallIdx!
+      const { startV, endV } = mesh.userData;
+      if (!startV || !endV) {
+        console.warn('Wall mesh missing start/end vertices');
         return;
       }
-      const verts = this.editorStateService.roomVertexIndices[roomIdx].map(idx => this.editorStateService.globalVertices[idx]);
-      const startV = verts[wallIdx];
-      const endV = verts[(wallIdx + 1) % verts.length];
       const point = intersects[0].point;
       const wallVec = new THREE.Vector2(endV.x - startV.x, endV.z - startV.z);
       const clickVec = new THREE.Vector2(point.x - startV.x, point.z - startV.z);
       const clickPosition = wallVec.length() > 0 ? (clickVec.dot(wallVec) / wallVec.lengthSq()) : 0.5;
 
       // Place the feature
-      const feature: WallFeature = {
+      const feature = {
         type: this.editorStateService.placingFeatureType,
         position: clickPosition,
         width: this.editorStateService.placingFeatureType === 'window' ? 1 : 0.9,
         height: this.editorStateService.placingFeatureType === 'window' ? 1.2 : 2.0
       };
+
+      // Find which room(s) share this wall and update their features
+      // (You may need to search all rooms for the matching wall segment)
+      // For now, update the selected room:
+      const roomIdx = this.editorStateService.selectedRoomIndex;
+      if (roomIdx == null) {
+        console.warn('No room selected for feature placement');
+        return;
+      }
       const roomMeta = this.editorStateService.roomMetadata[roomIdx];
       if (!roomMeta.wallFeatures) roomMeta.wallFeatures = [];
+      // Find the wall index in the selected room that matches startV/endV
+      const verts = this.editorStateService.roomVertexIndices[roomIdx].map(idx => this.editorStateService.globalVertices[idx]);
+      let wallIdx = -1;
+      for (let i = 0; i < verts.length; i++) {
+        const a = verts[i], b = verts[(i + 1) % verts.length];
+        if ((a.x === startV.x && a.z === startV.z && b.x === endV.x && b.z === endV.z) ||
+          (a.x === endV.x && a.z === endV.z && b.x === startV.x && b.z === startV.z)) {
+          wallIdx = i;
+          break;
+        }
+      }
+      if (wallIdx === -1) {
+        console.warn('Could not find matching wall in selected room');
+        return;
+      }
       if (!roomMeta.wallFeatures[wallIdx]) roomMeta.wallFeatures[wallIdx] = [];
       roomMeta.wallFeatures[wallIdx].push(feature);
+
       this.roomWallService.updateWallFeatures(roomIdx, wallIdx, roomMeta.wallFeatures[wallIdx]);
       this.editorStateService.placingFeatureType = null; // Exit placement mode
       console.log('[handleWallClick] Feature placed:', feature);
