@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import * as THREE from 'three';
 import { EditorStateService } from './editor-state.service';
 import { ThreeRenderService } from './three-render.service';
-import { calculatePolygonArea, findOrAddGlobalVertex, clearDrawingVertexHighlights } from '../../utils/geometry-utils';
+import { calculatePolygonArea, findOrAddGlobalVertex, clearDrawingVertexHighlights, canonicalWallKey } from '../../utils/geometry-utils';
 import { WallFeature } from '../../models/room-feature.model';
 
 @Injectable({
@@ -37,12 +37,11 @@ export class RoomWallService {
       for (let i = 0; i < verts.length; i++) {
         const start = verts[i];
         const end = verts[(i + 1) % verts.length];
-        const key = `${start.x},${start.z}|${end.x},${end.z}`;
-        const reverseKey = `${end.x},${end.z}|${start.x},${start.z}`;
-        if (!wallSegments.has(key) && !wallSegments.has(reverseKey)) {
+        const key = canonicalWallKey(start, end);
+        if (!wallSegments.has(key)) {
           wallSegments.set(key, { rooms: [roomIdx], wallIndices: [[i]], features: [room.wallFeatures?.[i] || []] });
-        } else if (wallSegments.has(reverseKey)) {
-          const seg = wallSegments.get(reverseKey)!;
+        } else {
+          const seg = wallSegments.get(key)!;
           seg.rooms.push(roomIdx);
           seg.wallIndices.push([i]);
           seg.features.push(room.wallFeatures?.[i] || []);

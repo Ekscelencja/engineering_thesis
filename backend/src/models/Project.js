@@ -18,10 +18,19 @@ const vertexSchema = new mongoose.Schema({
   z: { type: Number, required: true }
 }, { _id: false });
 
+const WallFeatureSchema = new mongoose.Schema({
+  type: { type: String, enum: ['window', 'door'], required: true },
+  position: Number,
+  width: Number,
+  height: Number
+}, { _id: false });
+
 const roomMetadataSchema = new mongoose.Schema({
   name: String,
   type: String,
-  area: Number
+  area: Number,
+  color: Number,
+  wallFeatures: [[WallFeatureSchema]]
 }, { _id: false });
 
 const projectSchema = new mongoose.Schema({

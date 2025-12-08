@@ -102,3 +102,11 @@ export function findOrAddGlobalVertex(
   globalVertices.push({ x: v.x, z: v.z });
   return globalVertices.length - 1;
 }
+
+export function canonicalWallKey(a: {x: number, z: number}, b: {x: number, z: number}) {
+  if (a.x < b.x || (a.x === b.x && a.z < b.z)) {
+    return `${a.x},${a.z}|${b.x},${b.z}`;
+  } else {
+    return `${b.x},${b.z}|${a.x},${a.z}`;
+  }
+}
