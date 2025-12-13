@@ -9,6 +9,8 @@ import { ProjectIOService } from '../services/api/project-io.service';
 import { EditorEventsService } from '../services/threejs/editor-events.service';
 import { MatButtonModule } from '@angular/material/button';
 import * as THREE from 'three';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 
 @Component({
   selector: 'app-editor',
@@ -18,6 +20,12 @@ import * as THREE from 'three';
   imports: [CommonModule, FormsModule, MatButtonModule]
 })
 export class EditorComponent implements AfterViewInit, OnDestroy {
+  // --- Sofa Placement Proof-of-Concept ---
+  protected sofaModel: THREE.Group | null = null;
+  public isPlacingSofa: boolean = false;
+  public wallColor: string = '#cccccc';
+  public wallTexture: string = '';
+  public wallTextureTileSizeM = 1; // 1m x 1m tiles by default
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
 
   isNewProject: boolean = false;
@@ -132,7 +140,125 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.editorStateService.placingFeatureType = type;
   }
 
+  placeSofa() {
+    this.isPlacingSofa = true;
+
+    const mtlLoader = new MTLLoader();
+    mtlLoader.setPath('assets/3d_objects/sofa_1/');
+    mtlLoader.load('couch.mtl', (materials) => {
+      materials.preload();
+      const objLoader = new OBJLoader();
+      objLoader.setMaterials(materials);
+      objLoader.setPath('assets/3d_objects/sofa_1/');
+      objLoader.load('couch.obj', (object) => {
+        object.scale.set(0.01, 0.01, 0.01); // Adjust scale as needed
+        object.position.set(0, 0, 0);
+        this.threeRenderService.scene.add(object);
+        this.sofaModel = object;
+        console.log('Sofa loaded successfully');
+      }, undefined, (error) => {
+        console.error('Error loading OBJ:', error);
+      });
+    }, undefined, (error) => {
+      console.error('Error loading MTL:', error);
+    });
+  }
+
+  removeSofa() {
+    if (this.sofaModel) {
+      this.threeRenderService.scene.remove(this.sofaModel);
+      this.sofaModel = null;
+      this.isPlacingSofa = false;
+    }
+  }
+
   onCanvasClick(event: MouseEvent) {
+    if (this.isPlacingSofa && this.sofaModel) {
+      // Raycast to find position on floor
+      const canvas = this.canvasRef.nativeElement;
+      const mouse = new THREE.Vector2(
+        (event.offsetX / canvas.width) * 2 - 1,
+        -(event.offsetY / canvas.height) * 2 + 1
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, this.threeRenderService.camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const intersection = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, intersection);
+      if (intersection) {
+        this.sofaModel.position.set(intersection.x, 0, intersection.z);
+      }
+      this.isPlacingSofa = false;
+      return;
+    }
     this.editorEventsService.handleWallClick(event);
+  }
+
+  applyWallColor() {
+    // Apply color to all wall meshes (proof of concept: all walls)
+    const color = new THREE.Color(this.wallColor);
+    for (const wallArr of this.editorStateService.allWallMeshes) {
+      for (const wall of wallArr) {
+        (wall.material as THREE.MeshStandardMaterial).color = color;
+        (wall.material as THREE.MeshStandardMaterial).needsUpdate = true;
+      }
+    }
+  }
+
+  applyWallTexture() {
+    if (!this.wallTexture) {
+      this.applyWallColor();
+      return;
+    }
+    const url = `assets/textures/${this.wallTexture}.jpg`;
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      url,
+      (baseTexture) => {
+        baseTexture.colorSpace = THREE.SRGBColorSpace;
+        baseTexture.wrapS = THREE.RepeatWrapping;
+        baseTexture.wrapT = THREE.RepeatWrapping;
+        baseTexture.magFilter = THREE.LinearFilter;
+        baseTexture.minFilter = THREE.LinearMipmapLinearFilter;
+
+        const maxAniso = this.threeRenderService.renderer?.capabilities.getMaxAnisotropy?.() ?? 4;
+        baseTexture.anisotropy = maxAniso;
+
+        const tileSizeM = Math.max(0.01, this.wallTextureTileSizeM); // meters per one texture tile
+
+        for (const wallArr of this.editorStateService.allWallMeshes) {
+          for (const wall of wallArr) {
+            const tex = baseTexture.clone();
+            tex.needsUpdate = true;
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+
+            const { startV, endV, wallHeight } = wall.userData || {};
+            const lenM = startV && endV ? Math.hypot(endV.x - startV.x, endV.z - startV.z) : 1;
+            const hM = wallHeight ?? 2.7;
+
+            // UVs are in meters; repeat = physical size / tile size
+            tex.repeat.set(lenM / tileSizeM, hM / tileSizeM);
+            tex.offset.set(0, 0);
+
+            const mat = wall.material as THREE.MeshStandardMaterial;
+            mat.map = tex;
+            mat.color.set('#ffffff'); // remove tint
+            mat.roughness = 0.9;
+            mat.metalness = 0.0;
+            mat.needsUpdate = true;
+          }
+        }
+
+        if (this.threeRenderService.renderer) {
+          this.threeRenderService.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        }
+      },
+      undefined,
+      (err) => {
+        console.error('Failed to load texture:', url, err);
+        alert('Texture not found in assets/textures/');
+      }
+    );
   }
 }

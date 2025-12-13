@@ -13,6 +13,23 @@
 	<span *ngIf="editorStateService.placingFeatureType" style="margin-left:12px;color:#1976d2;font-weight:bold;">
 		Click a wall to place a {{ editorStateService.placingFeatureType }}
 	</span>
+
+	<!-- Sofa Placement Proof-of-Concept -->
+	<button mat-flat-button color="warn" (click)="placeSofa()" [disabled]="isPlacingSofa">Place Sofa</button>
+	<button mat-flat-button color="basic" (click)="removeSofa()" [disabled]="!sofaModel">Remove Sofa</button>
+	<span *ngIf="isPlacingSofa" style="margin-left:12px;color:#d32f2f;font-weight:bold;">Loading sofa model...</span>
+
+	<div class="wall-style-panel" style="margin-top: 12px;">
+		<label>Wall Color:</label>
+		<input type="color" [(ngModel)]="wallColor" (change)="applyWallColor()" />
+		<label style="margin-left: 12px;">Wall Texture:</label>
+		<select [(ngModel)]="wallTexture" (change)="applyWallTexture()">
+			<option value="">None</option>
+			<option value="wallpaper_1">Wallpaper 1</option>
+			<option value="wallpaper_2">Wallpaper 2</option>
+			<!-- Add more as needed -->
+		</select>
+	</div>
 </div>
 
 <!-- Room Metadata Sidebar

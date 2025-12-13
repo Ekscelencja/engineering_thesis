@@ -89,23 +89,34 @@ export class RoomWallService {
           hole.lineTo(x0, y0);
           shape.holes.push(hole);
         }
-        const geometry = new THREE.ExtrudeGeometry(shape, { depth: wallThickness, bevelEnabled: false });
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+          depth: wallThickness,
+          bevelEnabled: false
+        });
 
-        const material = new THREE.MeshStandardMaterial({ color: roomColor });
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          side: THREE.DoubleSide
+        });
         const wallMesh = new THREE.Mesh(geometry, material);
 
-        // Place at start vertex
+        // Position/orient along edge
         wallMesh.position.set(start.x, 0, start.z);
-
-        // Rotate to align with wall direction
         const angle = Math.atan2(dz, dx);
         wallMesh.rotation.y = -angle;
 
-        // Store start/end vertices for click handling
+        // Center thickness on the edge (mesh-level translation)
+        wallMesh.translateZ(-wallThickness / 2);
+
+        // IMPORTANT: UVs should be remapped in geometry space where Z ∈ [0, depth]
+        this.remapWallUVsZeroToDepth(geometry, wallThickness);
+
+        // Store metadata for per-wall tiling
         wallMesh.userData = {
           startV: start,
           endV: end,
-          wallKey: key
+          wallKey: key,
+          wallHeight
         };
 
         wallMeshes.push(wallMesh);
@@ -321,7 +332,7 @@ export class RoomWallService {
     }
     clearDrawingVertexHighlights(this.threeRender.scene, this.editorState.drawingVertexMeshes);
   }
-  
+
   // Helper to regenerate all deduplicated walls after any change
   regenerateAllWalls() {
     // Remove all current wall meshes from scene
@@ -348,4 +359,60 @@ export class RoomWallService {
       this.threeRender.scene.add(wall);
     }
   }
+
+  /** UVs for centered thickness: z spans [-t/2, +t/2] */
+  remapWallUVsCentered(geometry: THREE.ExtrudeGeometry, wallThickness: number) {
+    const pos = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const uvArr = new Float32Array(pos.count * 2);
+    const halfT = wallThickness / 2;
+    const eps = 1e-5;
+
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+
+      let u: number;
+      // Front/back faces: z ~ -halfT or +halfT
+      if (Math.abs(z + halfT) < eps || Math.abs(z - halfT) < eps) {
+        u = x;         // tile along wall length
+      } else {
+        u = z;         // tile along thickness
+      }
+      uvArr[i * 2 + 0] = u;
+      uvArr[i * 2 + 1] = y; // height
+    }
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uvArr, 2));
+    geometry.attributes['uv'].needsUpdate = true;
+  }
+
+  remapWallUVsZeroToDepth(geometry: THREE.ExtrudeGeometry, wallThickness: number) {
+    const pos = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const uvArr = new Float32Array(pos.count * 2);
+    const eps = 1e-5;
+
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i); // along wall length (local X)
+      const y = pos.getY(i); // height
+      const z = pos.getZ(i); // 0..wallThickness in geometry space
+
+      // Front/back faces: z ≈ 0 or z ≈ wallThickness
+      // Side faces: 0 < z < wallThickness
+      let u: number, v: number;
+      if (Math.abs(z) < eps || Math.abs(z - wallThickness) < eps) {
+        // Front/back: tile by length (x) and height (y)
+        u = x; v = y;
+      } else {
+        // Side: tile by thickness (z) and height (y)
+        u = z; v = y;
+      }
+
+      uvArr[i * 2 + 0] = u;
+      uvArr[i * 2 + 1] = v;
+    }
+
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uvArr, 2));
+    geometry.attributes['uv'].needsUpdate = true;
+  }
 }
+
