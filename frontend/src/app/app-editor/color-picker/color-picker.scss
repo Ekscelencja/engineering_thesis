@@ -1,0 +1,22 @@
+.cp-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  user-select: none;
+}
+
+.cp-wheel {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: 2px solid var(--mat-sys-outline);
+  cursor: crosshair;
+}
+
+.cp-lum {
+  width: 180px;
+  height: 16px;
+  border-radius: 2px;
+  border: 2px solid var(--mat-sys-outline);
+  cursor: ew-resize;
+}

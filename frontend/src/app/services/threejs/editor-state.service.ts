@@ -12,6 +12,9 @@ export interface RoomMetadata {
 
 @Injectable({ providedIn: 'root' })
 export class EditorStateService {
+  // Step-based workflow: 1=Rooms, 2=Walls/Features, 3=Furnishing
+  public editorStep: 1 | 2 | 3 = 1;
+  
   // Drawing state aa
   public isDrawing = false;
   public meshDrawingActive = false;

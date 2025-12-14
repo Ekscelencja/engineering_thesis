@@ -44,7 +44,8 @@ const projectSchema = new mongoose.Schema({
   // 3D editor state
   globalVertices: [vertexSchema],
   roomVertexIndices: [[Number]],
-  roomMetadata: [roomMetadataSchema]
+  roomMetadata: [roomMetadataSchema],
+  editorStep: { type: Number, default: 1, min: 1, max: 3 } // 1=Rooms, 2=Walls&Features, 3=Furnishing
 }, { timestamps: true });
 
 module.exports = mongoose.model('Project', projectSchema);

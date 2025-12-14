@@ -1,4 +1,5 @@
-import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, NgZone, ChangeDetectorRef, Input, SimpleChanges, Output, EventEmitter } from '@angular/core';
+
+import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, NgZone, ChangeDetectorRef, Input, SimpleChanges, Output, EventEmitter, Pipe, PipeTransform } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EditorStateService } from '../services/threejs/editor-state.service';
@@ -8,16 +9,30 @@ import { RoomWallService } from '../services/threejs/room-wall.service';
 import { ProjectIOService } from '../services/api/project-io.service';
 import { EditorEventsService } from '../services/threejs/editor-events.service';
 import { MatButtonModule } from '@angular/material/button';
+import { MatStepperModule, MatStepper } from '@angular/material/stepper';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { StepperSelectionEvent } from '@angular/cdk/stepper';
+import { MatTableModule } from '@angular/material/table';
+import { ColorPickerComponent } from './color-picker/color-picker';
+
+@Pipe({ name: 'numberToColor' })
+export class NumberToColorPipe implements PipeTransform {
+  transform(value: number): string {
+    if (typeof value !== 'number') return '#000000';
+    return '#' + value.toString(16).padStart(6, '0');
+  }
+}
 
 @Component({
   selector: 'app-editor',
   standalone: true,
   templateUrl: './editor.html',
   styleUrls: ['./editor.scss'],
-  imports: [CommonModule, FormsModule, MatButtonModule]
+  imports: [CommonModule, FormsModule, MatButtonModule, MatStepperModule, MatInputModule, MatIconModule, MatTableModule, NumberToColorPipe, ColorPickerComponent]
 })
 export class EditorComponent implements AfterViewInit, OnDestroy {
   // --- Sofa Placement Proof-of-Concept ---
@@ -25,9 +40,20 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   public isPlacingSofa: boolean = false;
   public wallColor: string = '#cccccc';
   public wallTexture: string = '';
+  public floorTexture: string = '';
   public wallTextureTileSizeM = 1; // 1m x 1m tiles by default
-  @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
 
+  wallFeatureRows = [
+    { type: 'features', label: 'Wall Features', expanded: false },
+    { type: 'color', label: 'Wall Color', expanded: false },
+    { type: 'wtexture', label: 'Wall Texture', expanded: false },
+    { type: 'ftexture', label: 'Floor Texture', expanded: false }
+  ];
+
+  @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('stepper') stepperRef?: MatStepper;
+
+  actionPanelExpanded: boolean = true;
   isNewProject: boolean = false;
   clientId: string | null = null;
   projectTitle: string | null = null;
@@ -37,6 +63,21 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   @Input() newProjectTitle: string | null = null;
   @Input() projectData: Partial<ProjectData> | null = null;
   @Output() closeEditor = new EventEmitter<void>();
+
+  public get roomMetadata() {
+    return this.editorStateService.roomMetadata;
+  }
+  public get selectedRoomMesh() {
+    return this.editorStateService.selectedRoomMesh;
+  }
+
+  public get selectedRoomIndex() {
+    return this.editorStateService.selectedRoomIndex;
+  }
+
+  public get editorStep() {
+    return this.editorStateService.editorStep;
+  }
 
   constructor(
     private ngZone: NgZone,
@@ -69,11 +110,19 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   ngOnChanges(changes: SimpleChanges) {
     if (changes['projectId'] && this.projectId) {
       this.projectService.loadProject(this.projectId).subscribe({
-        next: (data) => (
-          this.isNewProject = false,
-          this.roomWallService.rebuildFromData(data),
-          this.projectTitle = data.title,
-          this.clientId = data.client),
+        next: (data) => {
+          this.isNewProject = false;
+          this.editorStateService.editorStep = data.editorStep || 1;
+          this.roomWallService.rebuildFromData(data);
+          this.projectTitle = data.title;
+          this.clientId = data.client;
+          setTimeout(() => {
+            if (this.stepperRef) {
+              this.stepperRef.selectedIndex = this.editorStateService.editorStep - 1;
+            }
+            this.cdr.detectChanges();
+          });
+        },
         error: (err) => alert('Load failed: ' + err.message)
       });
     }
@@ -101,7 +150,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       client: this.isNewProject ? this.newProjectClientId! : this.clientId!,
       globalVertices: this.editorStateService.globalVertices,
       roomVertexIndices: this.editorStateService.roomVertexIndices,
-      roomMetadata: this.editorStateService.roomMetadata
+      roomMetadata: this.editorStateService.roomMetadata,
+      editorStep: this.editorStateService.editorStep
     };
     if (this.isNewProject) {
       this.projectService.saveProject(project).subscribe({
@@ -125,15 +175,16 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.closeEditor.emit();
   }
 
-  public get roomMetadata() {
-    return this.editorStateService.roomMetadata;
-  }
-  public get selectedRoomMesh() {
-    return this.editorStateService.selectedRoomMesh;
-  }
-
-  public get selectedRoomIndex() {
-    return this.editorStateService.selectedRoomIndex;
+  onStepperSelectionChange(event: StepperSelectionEvent) {
+    const newStep = event.selectedIndex + 1;
+    if (this.editorStep !== newStep) {
+      this.editorStateService.editorStep = newStep as 1 | 2 | 3;
+      if (newStep === 1) {
+        this.roomWallService.hideAllWalls();
+      } else {
+        this.roomWallService.regenerateAllWalls();
+      }
+    }
   }
 
   startPlacingFeature(type: 'window' | 'door') {
@@ -192,6 +243,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       return;
     }
     this.editorEventsService.handleWallClick(event);
+  }
+
+  onWallColorPicked(ev: { hex: string; num: number }) {
+    this.wallColor = ev.hex;
+    console.log('Wall color picked:', this.wallColor);
+    this.applyWallColor();
   }
 
   applyWallColor() {
@@ -261,4 +318,10 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       }
     );
   }
+
+  applyFloorTexture() {
+  // TODO: Implement floor texture application logic
+  // For now, just log the selected texture
+  console.log('Selected floor texture:', this.floorTexture);
+}
 }

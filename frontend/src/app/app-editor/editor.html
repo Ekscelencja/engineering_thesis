@@ -1,35 +1,138 @@
 <canvas #canvas class="three-canvas" (click)="onCanvasClick($event)"></canvas>
+<!-- Material Stepper UI -->
+<mat-horizontal-stepper #stepper [selectedIndex]="editorStep-1" linear
+	(selectionChange)="onStepperSelectionChange($event)">
+	<mat-step label="Draw Rooms">
+		<ng-template matStepLabel>Draw Rooms</ng-template>
+		<div></div>
+		<button mat-button matStepperNext>Next</button>
+	</mat-step>
+	<mat-step label="Walls & Features">
+		<ng-template matStepLabel>Walls & Features</ng-template>
+		<div></div>
+		<button mat-button matStepperPrevious>Back</button>
+		<button mat-button matStepperNext>Next</button>
+	</mat-step>
+	<mat-step label="Furnishing">
+		<ng-template matStepLabel>Furnishing</ng-template>
+		<div></div>
+		<button mat-button matStepperPrevious>Back</button>
+	</mat-step>
+</mat-horizontal-stepper>
 
-<div class="editor-action-buttons">
-	<button *ngIf="userType === 'architect'" mat-flat-button class="save-project-button"
-		(click)="saveProjectToServer()">Save project</button>
-	<button *ngIf="userType === 'architect'" mat-flat-button class="close-editor-button" (click)="exitEditor()">Close
-		editor</button>
-	<!-- Placement buttons for window/door -->
-	<button mat-flat-button color="primary" (click)="startPlacingFeature('window')"
-		[disabled]="editorStateService.placingFeatureType !== null">Place Window</button>
-	<button mat-flat-button color="accent" (click)="startPlacingFeature('door')"
-		[disabled]="editorStateService.placingFeatureType !== null">Place Door</button>
-	<span *ngIf="editorStateService.placingFeatureType" style="margin-left:12px;color:#1976d2;font-weight:bold;">
-		Click a wall to place a {{ editorStateService.placingFeatureType }}
-	</span>
+<!-- Right-side expandable panel for steps 2 & 3 -->
+<div class="editor-action-panel" [class.expanded]="actionPanelExpanded">
+	<button class="expand-collapse-button" [class.expanded]="actionPanelExpanded"
+		(click)="actionPanelExpanded = !actionPanelExpanded">
+		<mat-icon svgIcon="chevron" class="nav-icon" aria-hidden="true"></mat-icon>
+	</button>
 
-	<!-- Sofa Placement Proof-of-Concept -->
-	<button mat-flat-button color="warn" (click)="placeSofa()" [disabled]="isPlacingSofa">Place Sofa</button>
-	<button mat-flat-button color="basic" (click)="removeSofa()" [disabled]="!sofaModel">Remove Sofa</button>
-	<span *ngIf="isPlacingSofa" style="margin-left:12px;color:#d32f2f;font-weight:bold;">Loading sofa model...</span>
-
-	<div class="wall-style-panel" style="margin-top: 12px;">
-		<label>Wall Color:</label>
-		<input type="color" [(ngModel)]="wallColor" (change)="applyWallColor()" />
-		<label style="margin-left: 12px;">Wall Texture:</label>
-		<select [(ngModel)]="wallTexture" (change)="applyWallTexture()">
-			<option value="">None</option>
-			<option value="wallpaper_1">Wallpaper 1</option>
-			<option value="wallpaper_2">Wallpaper 2</option>
-			<!-- Add more as needed -->
-		</select>
+	<div class="editor-action-buttons" *ngIf="userType === 'architect'">
+		<button mat-button color="accent" (click)="saveProjectToServer()" class="full-width save-project-button">
+			<span>Save project</span>
+			<mat-icon svgIcon="save" class="nav-icon" aria-hidden="true"></mat-icon>
+		</button>
+		<button mat-button color="accent" (click)="exitEditor()" class="full-width close-editor-button">
+			<span>Close editor</span>
+			<mat-icon svgIcon="close" class="nav-icon" aria-hidden="true"></mat-icon>
+		</button>
 	</div>
+
+	<div class="editor-action-metadata">
+		<h2 class="metadata-title">Rooms</h2>
+		<div *ngFor="let room of roomMetadata; let i = index" class="room-metadata-summary"
+			[class.selected]="i === selectedRoomIndex">
+			<p class="room-name" [style.color]="room.color | numberToColor">{{ room.name || 'Room ' + (i+1) }}</p>
+			<p class="room-type">{{ room.type || 'Type: N/A' }}</p>
+			<p class="room-area">Area: {{ room.area | number:'1.2-2' }} m²</p>
+		</div>
+	</div>
+
+	<!-- Step 2: Walls & Features -->
+	<ng-container *ngIf="editorStep === 2">
+		<table mat-table [dataSource]="wallFeatureRows" multiTemplateDataRows class="expandable-table">
+
+			<!-- Label Column -->
+			<ng-container matColumnDef="label">
+				<td mat-cell *matCellDef="let row" (click)="row.expanded = !row.expanded">
+					<mat-icon>{{ row.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+					{{ row.label }}
+				</td>
+			</ng-container>
+
+			<!-- Expanded Content Column -->
+			<ng-container matColumnDef="expandedDetail">
+				<td mat-cell *matCellDef="let row" [attr.colspan]="1">
+					<div class="expandable-content" [class.expanded]="row.expanded">
+						<ng-container *ngIf="row.expanded">
+							<!-- Wall Features -->
+							<ng-container *ngIf="row.type === 'features'">
+								<button mat-flat-button color="primary" (click)="startPlacingFeature('window')"
+									[disabled]="editorStateService.placingFeatureType !== null">
+									<span>Place Window</span>
+									<mat-icon svgIcon="window" class="nav-icon" aria-hidden="true"></mat-icon>
+								</button>
+								<button mat-flat-button color="accent" (click)="startPlacingFeature('door')"
+									[disabled]="editorStateService.placingFeatureType !== null">
+									<span>Place Door</span>
+									<mat-icon svgIcon="door" class="nav-icon" aria-hidden="true"></mat-icon>
+								</button>
+								<span *ngIf="editorStateService.placingFeatureType"
+									style="margin-left:12px;color:#1976d2;font-weight:bold;">
+									Click a wall to place a {{ editorStateService.placingFeatureType }}
+								</span>
+							</ng-container>
+
+							<!-- Wall Color -->
+							<ng-container *ngIf="row.type === 'color'">
+								<label>Wall Color:</label>
+								<app-color-picker [value]="wallColor" (valueChange)="onWallColorPicked($event)">
+								</app-color-picker>
+							</ng-container>
+
+							<!-- Wall Texture -->
+							<ng-container *ngIf="row.type === 'wtexture'">
+								<label>Wall Texture:</label>
+								<select [(ngModel)]="wallTexture" (change)="applyWallTexture()">
+									<option value="">None</option>
+									<option value="wallpaper_1">Wallpaper 1</option>
+									<option value="wallpaper_2">Wallpaper 2</option>
+								</select>
+							</ng-container>
+
+							<!-- Floor Texture -->
+							<ng-container *ngIf="row.type === 'ftexture'">
+								<label>Floor Texture:</label>
+								<select [(ngModel)]="floorTexture" (change)="applyFloorTexture()">
+									<option value="">None</option>
+									<option value="floor_1">Floor 1</option>
+									<option value="floor_2">Floor 2</option>
+								</select>
+							</ng-container>
+						</ng-container>
+					</div>
+				</td>
+			</ng-container>
+
+			<!-- Remove header row entirely -->
+			<!-- No mat-header-row / matHeaderRowDef -->
+
+			<!-- Main label rows -->
+			<tr mat-row *matRowDef="let row; columns: ['label'];" [class.expanded-header-row]="row.expanded"></tr>
+
+			<!-- Detail rows: render ONLY when row.expanded -->
+			<tr mat-row *matRowDef="let row; columns: ['expandedDetail'];" [class.expanded-row]="row.expanded"
+				[style.display]="row.expanded ? '' : 'none'"></tr>
+		</table>
+	</ng-container>
+
+	<!-- Step 3: Furnishing -->
+	<ng-container *ngIf="editorStep === 3">
+		<button mat-flat-button color="warn" (click)="placeSofa()" [disabled]="isPlacingSofa">Place Sofa</button>
+		<button mat-flat-button color="basic" (click)="removeSofa()" [disabled]="!sofaModel">Remove Sofa</button>
+		<span *ngIf="isPlacingSofa" style="margin-left:12px;color:#d32f2f;font-weight:bold;">Loading sofa
+			model...</span>
+	</ng-container>
 </div>
 
 <!-- Room Metadata Sidebar

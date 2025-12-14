@@ -9,6 +9,7 @@ export interface ProjectData {
   globalVertices: { x: number; z: number }[];
   roomVertexIndices: number[][];
   roomMetadata: { name: string; type: string; area: number }[];
+  editorStep?: 1 | 2 | 3; // 1=Rooms, 2=Walls/Features, 3=Furnishing
 }
 
 @Injectable({ providedIn: 'root' })
