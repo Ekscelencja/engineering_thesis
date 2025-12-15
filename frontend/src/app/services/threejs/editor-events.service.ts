@@ -10,6 +10,7 @@ import {
   highlightDrawingVertex,
   clearDrawingVertexHighlights
 } from '../../utils/geometry-utils';
+import { WallSide } from '../../models/room-feature.model';
 
 @Injectable({ providedIn: 'root' })
 export class EditorEventsService {
@@ -298,6 +299,16 @@ export class EditorEventsService {
         this.editorStateService.placingFeatureType = null;
         return;
       }
+
+      // After raycasting and finding the wall mesh:
+      const face = intersects[0].face;
+      const sideIndex = face && face.materialIndex !== undefined ? face.materialIndex : 0;
+      const sideMap = ['front', 'back', 'side', 'top', 'bottom', 'hole'] as const;
+      const side = sideMap[sideIndex] as WallSide;
+
+      // Store in state
+      this.editorStateService.selectedWall = mesh;
+      this.editorStateService.selectedWallSide = side;
 
       this.selectWall(mesh);
     } else {

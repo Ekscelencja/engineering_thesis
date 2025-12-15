@@ -150,5 +150,26 @@ export class ThreeRenderService {
         const light = new THREE.DirectionalLight(0xffffff, 1);
         light.position.set(5, 10, 7.5);
         this.scene.add(light);
+
+        // Add lights from top and all 4 world directions
+        const topLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        topLight.position.set(0, 20, 0);
+        this.scene.add(topLight);
+
+        const northLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        northLight.position.set(0, 0, 20);
+        this.scene.add(northLight);
+
+        const southLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        southLight.position.set(0, 0, -20);
+        this.scene.add(southLight);
+
+        const eastLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        eastLight.position.set(20, 0, 0);
+        this.scene.add(eastLight);
+
+        const westLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        westLight.position.set(-20, 0, 0);
+        this.scene.add(westLight);
     }
 }

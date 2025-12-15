@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { WallFeature } from '../../models/room-feature.model';
+import { WallFeature, WallSide } from '../../models/room-feature.model';
 import * as THREE from 'three';
 
 export interface RoomMetadata {
@@ -14,7 +14,7 @@ export interface RoomMetadata {
 export class EditorStateService {
   // Step-based workflow: 1=Rooms, 2=Walls/Features, 3=Furnishing
   public editorStep: 1 | 2 | 3 = 1;
-  
+
   // Drawing state aa
   public isDrawing = false;
   public meshDrawingActive = false;
@@ -31,6 +31,7 @@ export class EditorStateService {
   // Selection state
   public selectedRoomMesh: THREE.Mesh | null = null;
   public selectedWall: THREE.Mesh | null = null;
+  public selectedWallSide: WallSide | null = null;
   public get selectedRoomIndex(): number {
     return this.selectedRoomMesh ? this.roomMeshes.indexOf(this.selectedRoomMesh) : -1;
   }
@@ -45,4 +46,12 @@ export class EditorStateService {
   public globalVertices: { x: number, z: number }[] = [];
   public roomVertexIndices: number[][] = [];
   public placingFeatureType: 'window' | 'door' | null = null;
+  public wallAppearance: Record<string, {
+    front?: { color?: string; texture?: string },
+    back?: { color?: string; texture?: string },
+    side?: { color?: string; texture?: string },
+    top?: { color?: string; texture?: string },
+    bottom?: { color?: string; texture?: string },
+    hole?: { color?: string; texture?: string }
+  }> = {};
 }

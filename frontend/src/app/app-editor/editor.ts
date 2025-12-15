@@ -151,6 +151,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       globalVertices: this.editorStateService.globalVertices,
       roomVertexIndices: this.editorStateService.roomVertexIndices,
       roomMetadata: this.editorStateService.roomMetadata,
+      wallAppearance: this.editorStateService.wallAppearance,
       editorStep: this.editorStateService.editorStep
     };
     if (this.isNewProject) {
@@ -254,14 +255,16 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   applyWallColor() {
     const wall = this.editorStateService.selectedWall;
-    if (!wall) return;
-    this.roomWallService.applyWallColorToMesh(wall, this.wallColor);
+    const side = this.editorStateService.selectedWallSide;
+    if (!wall || !side) return;
+    this.roomWallService.applyWallColorToMesh(wall, this.wallColor, side);
   }
 
   applyWallTexture() {
     const wall = this.editorStateService.selectedWall;
-    if (!wall) return;
-    this.roomWallService.applyWallTextureToMesh(wall, this.wallTexture || null);
+    const side = this.editorStateService.selectedWallSide;
+    if (!wall || !side) return;
+    this.roomWallService.applyWallTextureToMesh(wall, this.wallTexture || null, side);
   }
 
   applyFloorTexture() {

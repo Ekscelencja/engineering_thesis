@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { EditorStateService } from './editor-state.service';
 import { ThreeRenderService } from './three-render.service';
 import { calculatePolygonArea, findOrAddGlobalVertex, clearDrawingVertexHighlights, canonicalWallKey } from '../../utils/geometry-utils';
-import { WallFeature } from '../../models/room-feature.model';
+import { WallFeature, WallSide, sideMap } from '../../models/room-feature.model';
+import { C } from '@angular/cdk/keycodes';
 
 @Injectable({
   providedIn: 'root'
@@ -94,11 +95,85 @@ export class RoomWallService {
           bevelEnabled: false
         });
 
-        const material = new THREE.MeshStandardMaterial({
-          color: 0xffffff,
-          side: THREE.DoubleSide
-        });
-        const wallMesh = new THREE.Mesh(geometry, material);
+        // Compute normals for face detection
+        geometry.computeVertexNormals();
+
+        // --- Create materials for all possible faces ---
+        // 0: front, 1: back, 2: sides (left/right edges), 3: top, 4: bottom, 5: hole edges
+        const materialFront = new THREE.MeshStandardMaterial({ color: 0xcccccc });  // RED: front
+        const materialBack = new THREE.MeshStandardMaterial({ color: 0xcccccc });   // GREEN: back
+        const materialSide = new THREE.MeshStandardMaterial({ color: 0xcccccc });   // BLUE: sides
+        const materialTop = new THREE.MeshStandardMaterial({ color: 0xcccccc });    // YELLOW: top
+        const materialBottom = new THREE.MeshStandardMaterial({ color: 0xcccccc }); // CYAN: bottom
+        const materialHole = new THREE.MeshStandardMaterial({ color: 0xcccccc });   // MAGENTA: hole edges
+
+        // Convert to non-indexed and rebuild groups per triangle based on face normal
+        geometry.toNonIndexed();
+        geometry.clearGroups();
+
+        const pos = geometry.getAttribute('position') as THREE.BufferAttribute;
+        const triCount = pos.count / 3;
+        const eps = 1e-4;
+        const wallH = wallHeight;
+        const wallT = wallThickness;
+
+        for (let t = 0; t < triCount; t++) {
+          const i0 = t * 3;
+          const i1 = t * 3 + 1;
+          const i2 = t * 3 + 2;
+
+          // Get triangle vertices
+          const v0 = new THREE.Vector3(pos.getX(i0), pos.getY(i0), pos.getZ(i0));
+          const v1 = new THREE.Vector3(pos.getX(i1), pos.getY(i1), pos.getZ(i1));
+          const v2 = new THREE.Vector3(pos.getX(i2), pos.getY(i2), pos.getZ(i2));
+
+          // Compute face normal
+          const edge1 = new THREE.Vector3().subVectors(v1, v0);
+          const edge2 = new THREE.Vector3().subVectors(v2, v0);
+          const normal = new THREE.Vector3().crossVectors(edge1, edge2).normalize();
+
+          let materialIndex = 2; // default to side
+
+          // Check face orientation based on normal
+          if (Math.abs(normal.z) > 0.9) {
+            // Front or back face
+            if (normal.z > 0) {
+              materialIndex = 1; // back (z+)
+            } else {
+              materialIndex = 0; // front (z-)
+            }
+          } else if (Math.abs(normal.y) > 0.9) {
+            // Top or bottom face
+            if (normal.y > 0) {
+              materialIndex = 3; // top
+            } else {
+              materialIndex = 4; // bottom
+            }
+          } else if (Math.abs(normal.x) > 0.9) {
+            // Left or right wall edge (side)
+            materialIndex = 2; // side
+          } else {
+            // Angled face - likely a hole edge
+            // Check if all vertices are between 0 and wallThickness in Z
+            const allInside = [v0, v1, v2].every(v => v.z > eps && v.z < wallT - eps);
+            if (allInside) {
+              materialIndex = 5; // hole edge
+            } else {
+              materialIndex = 2; // side
+            }
+          }
+
+          geometry.addGroup(i0, 3, materialIndex);
+        }
+
+        const wallMesh = new THREE.Mesh(geometry, [
+          materialFront,   // 0
+          materialBack,    // 1
+          materialSide,    // 2
+          materialTop,     // 3
+          materialBottom,  // 4
+          materialHole     // 5
+        ]);
 
         // Position/orient along edge
         wallMesh.position.set(start.x, 0, start.z);
@@ -158,7 +233,11 @@ export class RoomWallService {
       for (const wall of wallArr) {
         this.threeRender.scene.remove(wall);
         wall.geometry.dispose();
-        (wall.material as THREE.Material).dispose();
+        if (Array.isArray(wall.material)) {
+          wall.material.forEach(mat => mat.dispose());
+        } else {
+          (wall.material as THREE.Material).dispose();
+        }
       }
     }
     // Remove metadata and indices
@@ -254,7 +333,11 @@ export class RoomWallService {
       for (const wall of wallArr) {
         this.threeRender.scene.remove(wall);
         wall.geometry.dispose();
-        (wall.material as THREE.Material).dispose();
+        if (Array.isArray(wall.material)) {
+          wall.material.forEach(mat => mat.dispose());
+        } else {
+          (wall.material as THREE.Material).dispose();
+        }
       }
     }
     this.editorState.roomMeshes = [];
@@ -268,6 +351,9 @@ export class RoomWallService {
     this.editorState.globalVertices = data.globalVertices || [];
     this.editorState.roomVertexIndices = data.roomVertexIndices || [];
     this.editorState.roomMetadata = data.roomMetadata || [];
+
+    // Restore wallAppearance from data
+    this.editorState.wallAppearance = data.wallAppearance || {};
 
     for (let i = 0; i < this.editorState.roomVertexIndices.length; i++) {
       const indices = this.editorState.roomVertexIndices[i];
@@ -339,7 +425,11 @@ export class RoomWallService {
       for (const wall of wallArr) {
         this.threeRender.scene.remove(wall);
         wall.geometry.dispose();
-        (wall.material as THREE.Material).dispose();
+        if (Array.isArray(wall.material)) {
+          wall.material.forEach(mat => mat.dispose());
+        } else {
+          (wall.material as THREE.Material).dispose();
+        }
       }
     }
     this.editorState.allWallMeshes = [];
@@ -356,6 +446,29 @@ export class RoomWallService {
     // Add to scene
     for (const wall of newWallMeshes) {
       this.threeRender.scene.add(wall);
+    }
+
+    // --- PATCH: Apply saved wallAppearance by wallKey ---
+    const wallAppearance = this.editorState.wallAppearance;
+    console.log('Restoring wall appearances from saved data:', wallAppearance);
+    for (const [wallKey, appearance] of Object.entries(wallAppearance)) {
+      const wall = newWallMeshes.find(w => w.userData['wallKey'] === wallKey);
+      if (!wall) continue;
+      console.log(`Applying saved appearance to wall ${wallKey}`);
+      for (const [side, data] of Object.entries(appearance)) {
+        console.log(`Restoring appearance for wall ${wallKey} side ${side}`);
+        if (!sideMap.hasOwnProperty(side)) continue;
+        const mat = (wall.material as THREE.Material[])[sideMap[side as WallSide]] as THREE.MeshStandardMaterial;
+        if (data.color) {mat.color = new THREE.Color(data.color); console.log(`Applied color ${data.color} to wall ${wallKey} side ${side}`);}
+        if (data.texture) {
+          const texLoader = new THREE.TextureLoader();
+          const url = `assets/textures/${data.texture}.jpg`;
+          const tex = texLoader.load(url);
+          tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+          mat.map = tex;
+        }
+        mat.needsUpdate = true;
+      }
     }
   }
 
@@ -396,16 +509,30 @@ export class RoomWallService {
     geometry.attributes['uv'].needsUpdate = true;
   }
 
-  applyWallColorToMesh(wall: THREE.Mesh, colorHex: string) {
-    const mat = wall.material as THREE.MeshStandardMaterial;
-    mat.color = new THREE.Color(colorHex);
-    mat.needsUpdate = true;
-    // Optionally persist color in wallAppearance (if you use wall indices)
-    // Example: this.editorStateService.wallAppearance[wallIndex] = { ...existing, color: colorHex };
+  getWallIndexByMesh(wall: THREE.Mesh): number {
+    // If allWallMeshes is a flat array:
+    const allWalls = this.editorState.allWallMeshes.flat();
+    return allWalls.indexOf(wall);
   }
 
-  applyWallTextureToMesh(wall: THREE.Mesh, textureId: string | null) {
-    const mat = wall.material as THREE.MeshStandardMaterial;
+  applyWallColorToMesh(wall: THREE.Mesh, colorHex: string, side: 'front' | 'back' | 'side' | 'top' | 'bottom' | 'hole') {
+    const mat = (wall.material as THREE.Material[])[sideMap[side as WallSide]] as THREE.MeshStandardMaterial;
+    mat.color = new THREE.Color(colorHex);
+    mat.needsUpdate = true;
+
+    // Persist using wallKey instead of index
+    const wallKey = wall.userData['wallKey'];
+    if (wallKey) {
+      if (!this.editorState.wallAppearance[wallKey]) this.editorState.wallAppearance[wallKey] = {};
+      this.editorState.wallAppearance[wallKey][side] = {
+        ...this.editorState.wallAppearance[wallKey][side],
+        color: colorHex
+      };
+    }
+  }
+
+  applyWallTextureToMesh(wall: THREE.Mesh, textureId: string | null, side: 'front' | 'back' | 'side' | 'top' | 'bottom' | 'hole') {
+    const mat = (wall.material as THREE.Material[])[sideMap[side as WallSide]] as THREE.MeshStandardMaterial;
     if (!textureId) {
       mat.map = null;
     } else {
@@ -416,8 +543,16 @@ export class RoomWallService {
       mat.map = tex;
     }
     mat.needsUpdate = true;
-    // Optionally persist texture in wallAppearance
-    // Example: this.editorStateService.wallAppearance[wallIndex] = { ...existing, texture: textureId };
+
+    // Persist using wallKey instead of index
+    const wallKey = wall.userData['wallKey'];
+    if (wallKey) {
+      if (!this.editorState.wallAppearance[wallKey]) this.editorState.wallAppearance[wallKey] = {};
+      this.editorState.wallAppearance[wallKey][side] = {
+        ...this.editorState.wallAppearance[wallKey][side],
+        texture: textureId || ''
+      };
+    }
   }
 }
 
