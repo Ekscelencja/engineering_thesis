@@ -10,12 +10,15 @@ import {
   highlightDrawingVertex,
   clearDrawingVertexHighlights
 } from '../../utils/geometry-utils';
-import { WallFeature } from '../../models/room-feature.model';
 
 @Injectable({ providedIn: 'root' })
 export class EditorEventsService {
   private raycaster = new THREE.Raycaster();
   private canvasRef!: { nativeElement: HTMLCanvasElement };
+  private previewMesh: THREE.Mesh | null = null;
+  private lastPreviewWall: THREE.Mesh | null = null;
+  private lastPreviewPosition: THREE.Vector3 | null = null;
+  private lastPreviewRotationY: number = 0;
   public get selectedRoomIndex(): number {
     const idx = this.editorStateService.selectedRoomMesh ? this.editorStateService.roomMeshes.indexOf(this.editorStateService.selectedRoomMesh) : -1;
     console.log('[DEBUG] selectedRoomIndex:', idx);
@@ -29,7 +32,6 @@ export class EditorEventsService {
     private roomWallService: RoomWallService
   ) { }
 
-  /** Call this once after canvas is available */
   setCanvasRef(canvasRef: { nativeElement: HTMLCanvasElement }) {
     this.canvasRef = canvasRef;
   }
@@ -77,7 +79,6 @@ export class EditorEventsService {
       this.editorStateService.meshDrawingActive = !this.editorStateService.meshDrawingActive;
       this.setCanvasListeners();
       if (!this.editorStateService.meshDrawingActive) {
-        // Remove unfinished drawing line and vertex highlights
         if (this.editorStateService.drawingLine) {
           this.threeRenderService.scene.remove(this.editorStateService.drawingLine);
           this.editorStateService.drawingLine.geometry.dispose();
@@ -191,7 +192,6 @@ export class EditorEventsService {
       this.editorStateService.vertexHandles[
         this.editorStateService.draggingHandleIndex!
       ].position.set(point.x, 0.1, point.z);
-      // Update all rooms that use this global vertex
       this.roomWallService.updateAllRoomsUsingVertex(globalIdx);
     }
   };
@@ -202,11 +202,12 @@ export class EditorEventsService {
   };
 
   onRoomSelect = (event: PointerEvent) => {
+    if (this.editorStateService.editorStep > 1) return;
     console.log('[onRoomSelect] called, placingFeatureType:', this.editorStateService.placingFeatureType);
     if (
       this.editorStateService.ctrlPressed ||
       this.editorStateService.meshDrawingActive ||
-      this.editorStateService.placingFeatureType // Block selection if placing feature
+      this.editorStateService.placingFeatureType
     ) return;
     const rect = this.canvasRef.nativeElement.getBoundingClientRect();
     const mouse = new THREE.Vector2(
@@ -220,14 +221,106 @@ export class EditorEventsService {
     });
   };
 
-  handleWallClick(event: MouseEvent) {
-    console.log('[handleWallClick] called, placingFeatureType:', this.editorStateService.placingFeatureType);
-
-    if (!this.editorStateService.placingFeatureType) {
-      // Not in placement mode, let room selection run
-      this.onRoomSelect(event as any);
-      return;
+  selectWall(wall: THREE.Mesh | null) {
+    if (this.editorStateService.selectedWall) {
+      const prev = this.editorStateService.selectedWall;
+      if (prev.userData['outlineMesh']) {
+        prev.remove(prev.userData['outlineMesh']);
+        prev.userData['outlineMesh'].geometry.dispose();
+        prev.userData['outlineMesh'].material.dispose();
+        prev.userData['outlineMesh'] = undefined;
+      }
     }
+    this.editorStateService.selectedWall = wall;
+
+    if (wall) {
+      const outlineMat = new THREE.MeshBasicMaterial({
+        color: 0xffff66,
+        side: THREE.BackSide
+      });
+      const outlineMesh = new THREE.Mesh(wall.geometry.clone(), outlineMat);
+      outlineMesh.scale.multiplyScalar(1.05);
+      wall.add(outlineMesh);
+      wall.userData['outlineMesh'] = outlineMesh;
+    }
+  }
+
+  handleWallClick(event: MouseEvent) {
+    const canvas = this.canvasRef.nativeElement;
+    const mouse = new THREE.Vector2(
+      (event.offsetX / canvas.width) * 2 - 1,
+      -(event.offsetY / canvas.height) * 2 + 1
+    );
+    this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
+
+    const wallMeshes = this.editorStateService.allWallMeshes.flat();
+    const intersects = this.raycaster.intersectObjects(wallMeshes, false);
+
+    if (intersects.length > 0) {
+      const mesh = intersects[0].object as THREE.Mesh;
+
+      if (this.editorStateService.placingFeatureType) {
+        const { startV, endV } = mesh.userData;
+        if (!startV || !endV) {
+          console.warn('Wall mesh missing start/end vertices');
+          return;
+        }
+        const point = intersects[0].point;
+        const wallVec = new THREE.Vector2(endV.x - startV.x, endV.z - startV.z);
+        const clickVec = new THREE.Vector2(point.x - startV.x, point.z - startV.z);
+        const clickPosition = wallVec.length() > 0 ? (clickVec.dot(wallVec) / wallVec.lengthSq()) : 0.5;
+
+        for (let roomIdx = 0; roomIdx < this.editorStateService.roomVertexIndices.length; roomIdx++) {
+          const verts = this.editorStateService.roomVertexIndices[roomIdx].map(
+            idx => this.editorStateService.globalVertices[idx]
+          );
+          for (let i = 0; i < verts.length; i++) {
+            const a = verts[i], b = verts[(i + 1) % verts.length];
+            if (
+              (a.x === startV.x && a.z === startV.z && b.x === endV.x && b.z === endV.z) ||
+              (a.x === endV.x && a.z === endV.z && b.x === startV.x && b.z === startV.z)
+            ) {
+              const feature = {
+                type: this.editorStateService.placingFeatureType,
+                position: clickPosition,
+                width: this.editorStateService.placingFeatureType === 'window' ? 1 : 0.9,
+                height: this.editorStateService.placingFeatureType === 'window' ? 1.2 : 2.0
+              };
+              const roomMeta = this.editorStateService.roomMetadata[roomIdx];
+              if (!roomMeta.wallFeatures) roomMeta.wallFeatures = [];
+              if (!roomMeta.wallFeatures[i]) roomMeta.wallFeatures[i] = [];
+              roomMeta.wallFeatures[i].push(feature);
+              this.roomWallService.updateWallFeatures(roomIdx, i, roomMeta.wallFeatures[i]);
+            }
+          }
+        }
+        this.disposeFeaturePreview();
+        this.editorStateService.placingFeatureType = null;
+        return;
+      }
+
+      this.selectWall(mesh);
+    } else {
+      this.selectWall(null);
+    }
+  }
+
+  initFeaturePreview() {
+    this.canvasRef.nativeElement.addEventListener('pointermove', this.onPointerMovePreview);
+  }
+
+  disposeFeaturePreview() {
+    this.canvasRef.nativeElement.removeEventListener('pointermove', this.onPointerMovePreview);
+    if (this.previewMesh) {
+      this.threeRenderService.scene.remove(this.previewMesh);
+      this.previewMesh.geometry.dispose();
+      (this.previewMesh.material as THREE.Material).dispose();
+      this.previewMesh = null;
+    }
+  }
+
+  onPointerMovePreview = (event: PointerEvent) => {
+    if (!this.editorStateService.placingFeatureType) return;
 
     const canvas = this.canvasRef.nativeElement;
     const mouse = new THREE.Vector2(
@@ -236,66 +329,46 @@ export class EditorEventsService {
     );
     this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
 
-    // Flatten all wall meshes
     const wallMeshes = this.editorStateService.allWallMeshes.flat();
-    const intersects = this.raycaster.intersectObjects(wallMeshes);
-
-    console.log('[handleWallClick] wallMeshes:', wallMeshes.length, 'intersects:', intersects.length);
+    const intersects = this.raycaster.intersectObjects(wallMeshes, false);
 
     if (intersects.length > 0) {
-      const mesh = intersects[0].object;
-      // Use startV and endV from userData, not wallIdx!
-      const { startV, endV } = mesh.userData;
-      if (!startV || !endV) {
-        console.warn('Wall mesh missing start/end vertices');
-        return;
-      }
-      const point = intersects[0].point;
-      const wallVec = new THREE.Vector2(endV.x - startV.x, endV.z - startV.z);
-      const clickVec = new THREE.Vector2(point.x - startV.x, point.z - startV.z);
-      const clickPosition = wallVec.length() > 0 ? (clickVec.dot(wallVec) / wallVec.lengthSq()) : 0.5;
+      const hit = intersects[0];
+      const wall = hit.object as THREE.Mesh;
+      const point = hit.point;
 
-      // Place the feature
-      const feature = {
-        type: this.editorStateService.placingFeatureType,
-        position: clickPosition,
-        width: this.editorStateService.placingFeatureType === 'window' ? 1 : 0.9,
-        height: this.editorStateService.placingFeatureType === 'window' ? 1.2 : 2.0
-      };
+      const { startV, endV } = wall.userData;
+      let angle = 0;
+      if (startV && endV) {
+        const wallDir = new THREE.Vector3(endV.x - startV.x, 0, endV.z - startV.z).normalize();
+        angle = -Math.atan2(wallDir.z, wallDir.x);
+      }
 
-      // Find which room(s) share this wall and update their features
-      // (You may need to search all rooms for the matching wall segment)
-      // For now, update the selected room:
-      const roomIdx = this.editorStateService.selectedRoomIndex;
-      if (roomIdx == null) {
-        console.warn('No room selected for feature placement');
-        return;
-      }
-      const roomMeta = this.editorStateService.roomMetadata[roomIdx];
-      if (!roomMeta.wallFeatures) roomMeta.wallFeatures = [];
-      // Find the wall index in the selected room that matches startV/endV
-      const verts = this.editorStateService.roomVertexIndices[roomIdx].map(idx => this.editorStateService.globalVertices[idx]);
-      let wallIdx = -1;
-      for (let i = 0; i < verts.length; i++) {
-        const a = verts[i], b = verts[(i + 1) % verts.length];
-        if ((a.x === startV.x && a.z === startV.z && b.x === endV.x && b.z === endV.z) ||
-          (a.x === endV.x && a.z === endV.z && b.x === startV.x && b.z === startV.z)) {
-          wallIdx = i;
-          break;
-        }
-      }
-      if (wallIdx === -1) {
-        console.warn('Could not find matching wall in selected room');
-        return;
-      }
-      if (!roomMeta.wallFeatures[wallIdx]) roomMeta.wallFeatures[wallIdx] = [];
-      roomMeta.wallFeatures[wallIdx].push(feature);
+      const wallHeight = this.roomWallService.wallHeight ?? 3;
+      const featureHeight = this.editorStateService.placingFeatureType === 'window' ? 1.2 : 2.0;
+      let snappedY = Math.max(0, Math.min(wallHeight - featureHeight, Math.round(point.y * 10) / 10));
 
-      this.roomWallService.updateWallFeatures(roomIdx, wallIdx, roomMeta.wallFeatures[wallIdx]);
-      this.editorStateService.placingFeatureType = null; // Exit placement mode
-      console.log('[handleWallClick] Feature placed:', feature);
-    } else {
-      console.log('[handleWallClick] No wall intersected');
+      if (!this.previewMesh) {
+        const size = this.editorStateService.placingFeatureType === 'window'
+          ? [1, 1.2, 0.1]
+          : [0.9, 2.0, 0.1];
+        const geom = new THREE.BoxGeometry(...size);
+        const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff, opacity: 0.5, transparent: true });
+        this.previewMesh = new THREE.Mesh(geom, mat);
+        this.threeRenderService.scene.add(this.previewMesh);
+      }
+      this.previewMesh.position.copy(point);
+      this.previewMesh.position.y = snappedY;
+      this.previewMesh.rotation.set(0, angle, 0);
+      this.previewMesh.visible = true;
+
+      this.lastPreviewWall = wall;
+      this.lastPreviewPosition = this.previewMesh.position.clone();
+      this.lastPreviewRotationY = angle;
+    } else if (this.previewMesh && this.lastPreviewPosition) {
+      this.previewMesh.position.copy(this.lastPreviewPosition);
+      this.previewMesh.rotation.set(0, this.lastPreviewRotationY, 0);
+      this.previewMesh.visible = true;
     }
-  }
+  };
 }

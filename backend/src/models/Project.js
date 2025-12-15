@@ -22,7 +22,8 @@ const WallFeatureSchema = new mongoose.Schema({
   type: { type: String, enum: ['window', 'door'], required: true },
   position: Number,
   width: Number,
-  height: Number
+  height: Number,
+  y: Number
 }, { _id: false });
 
 const roomMetadataSchema = new mongoose.Schema({

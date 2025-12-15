@@ -229,8 +229,6 @@ export class RoomWallService {
     }
     mat.needsUpdate = true;
 
-    this.regenerateAllWalls();
-
     // Update area
     this.editorState.roomMetadata[roomIndex].area = calculatePolygonArea(verts);
   }
@@ -396,6 +394,30 @@ export class RoomWallService {
 
     geometry.setAttribute('uv', new THREE.BufferAttribute(uvArr, 2));
     geometry.attributes['uv'].needsUpdate = true;
+  }
+
+  applyWallColorToMesh(wall: THREE.Mesh, colorHex: string) {
+    const mat = wall.material as THREE.MeshStandardMaterial;
+    mat.color = new THREE.Color(colorHex);
+    mat.needsUpdate = true;
+    // Optionally persist color in wallAppearance (if you use wall indices)
+    // Example: this.editorStateService.wallAppearance[wallIndex] = { ...existing, color: colorHex };
+  }
+
+  applyWallTextureToMesh(wall: THREE.Mesh, textureId: string | null) {
+    const mat = wall.material as THREE.MeshStandardMaterial;
+    if (!textureId) {
+      mat.map = null;
+    } else {
+      const texLoader = new THREE.TextureLoader();
+      const url = `assets/textures/${textureId}.jpg`;
+      const tex = texLoader.load(url);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      mat.map = tex;
+    }
+    mat.needsUpdate = true;
+    // Optionally persist texture in wallAppearance
+    // Example: this.editorStateService.wallAppearance[wallIndex] = { ...existing, texture: textureId };
   }
 }
 

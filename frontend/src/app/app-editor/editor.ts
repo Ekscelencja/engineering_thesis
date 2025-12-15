@@ -189,6 +189,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   startPlacingFeature(type: 'window' | 'door') {
     this.editorStateService.placingFeatureType = type;
+    this.editorEventsService.initFeaturePreview();
   }
 
   placeSofa() {
@@ -252,76 +253,20 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   applyWallColor() {
-    // Apply color to all wall meshes (proof of concept: all walls)
-    const color = new THREE.Color(this.wallColor);
-    for (const wallArr of this.editorStateService.allWallMeshes) {
-      for (const wall of wallArr) {
-        (wall.material as THREE.MeshStandardMaterial).color = color;
-        (wall.material as THREE.MeshStandardMaterial).needsUpdate = true;
-      }
-    }
+    const wall = this.editorStateService.selectedWall;
+    if (!wall) return;
+    this.roomWallService.applyWallColorToMesh(wall, this.wallColor);
   }
 
   applyWallTexture() {
-    if (!this.wallTexture) {
-      this.applyWallColor();
-      return;
-    }
-    const url = `assets/textures/${this.wallTexture}.jpg`;
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (baseTexture) => {
-        baseTexture.colorSpace = THREE.SRGBColorSpace;
-        baseTexture.wrapS = THREE.RepeatWrapping;
-        baseTexture.wrapT = THREE.RepeatWrapping;
-        baseTexture.magFilter = THREE.LinearFilter;
-        baseTexture.minFilter = THREE.LinearMipmapLinearFilter;
-
-        const maxAniso = this.threeRenderService.renderer?.capabilities.getMaxAnisotropy?.() ?? 4;
-        baseTexture.anisotropy = maxAniso;
-
-        const tileSizeM = Math.max(0.01, this.wallTextureTileSizeM); // meters per one texture tile
-
-        for (const wallArr of this.editorStateService.allWallMeshes) {
-          for (const wall of wallArr) {
-            const tex = baseTexture.clone();
-            tex.needsUpdate = true;
-            tex.wrapS = THREE.RepeatWrapping;
-            tex.wrapT = THREE.RepeatWrapping;
-
-            const { startV, endV, wallHeight } = wall.userData || {};
-            const lenM = startV && endV ? Math.hypot(endV.x - startV.x, endV.z - startV.z) : 1;
-            const hM = wallHeight ?? 2.7;
-
-            // UVs are in meters; repeat = physical size / tile size
-            tex.repeat.set(lenM / tileSizeM, hM / tileSizeM);
-            tex.offset.set(0, 0);
-
-            const mat = wall.material as THREE.MeshStandardMaterial;
-            mat.map = tex;
-            mat.color.set('#ffffff'); // remove tint
-            mat.roughness = 0.9;
-            mat.metalness = 0.0;
-            mat.needsUpdate = true;
-          }
-        }
-
-        if (this.threeRenderService.renderer) {
-          this.threeRenderService.renderer.outputColorSpace = THREE.SRGBColorSpace;
-        }
-      },
-      undefined,
-      (err) => {
-        console.error('Failed to load texture:', url, err);
-        alert('Texture not found in assets/textures/');
-      }
-    );
+    const wall = this.editorStateService.selectedWall;
+    if (!wall) return;
+    this.roomWallService.applyWallTextureToMesh(wall, this.wallTexture || null);
   }
 
   applyFloorTexture() {
-  // TODO: Implement floor texture application logic
-  // For now, just log the selected texture
-  console.log('Selected floor texture:', this.floorTexture);
-}
+    // TODO: Implement floor texture application logic
+    // For now, just log the selected texture
+    console.log('Selected floor texture:', this.floorTexture);
+  }
 }

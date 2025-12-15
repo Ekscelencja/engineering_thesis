@@ -30,6 +30,7 @@ export class EditorStateService {
 
   // Selection state
   public selectedRoomMesh: THREE.Mesh | null = null;
+  public selectedWall: THREE.Mesh | null = null;
   public get selectedRoomIndex(): number {
     return this.selectedRoomMesh ? this.roomMeshes.indexOf(this.selectedRoomMesh) : -1;
   }
