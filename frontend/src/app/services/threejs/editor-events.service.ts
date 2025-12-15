@@ -95,6 +95,7 @@ export class EditorEventsService {
       }
     }
     if (event.key === 'e' || event.key === 'E') {
+      if (this.editorStateService.editorStep > 1) return;
       this.editorStateService.editMode = !this.editorStateService.editMode;
       this.setCanvasListeners();
       if (this.editorStateService.editMode && this.editorStateService.selectedRoomMesh) {
@@ -203,7 +204,6 @@ export class EditorEventsService {
   };
 
   onRoomSelect = (event: PointerEvent) => {
-    if (this.editorStateService.editorStep > 1) return;
     console.log('[onRoomSelect] called, placingFeatureType:', this.editorStateService.placingFeatureType);
     if (
       this.editorStateService.ctrlPressed ||

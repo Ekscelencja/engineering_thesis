@@ -17,6 +17,7 @@ export interface ProjectData {
     bottom?: { color?: string; texture?: string },
     hole?: { color?: string; texture?: string }
   }>;
+  floorAppearance?: Record<string, { color?: string; texture?: string }>;
   editorStep?: 1 | 2 | 3; // 1=Rooms, 2=Walls/Features, 3=Furnishing
 }
 

@@ -40,13 +40,15 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   public isPlacingSofa: boolean = false;
   public wallColor: string = '#cccccc';
   public wallTexture: string = '';
+  public floorColor: string = '#888888';
   public floorTexture: string = '';
   public wallTextureTileSizeM = 1; // 1m x 1m tiles by default
 
   wallFeatureRows = [
     { type: 'features', label: 'Wall Features', expanded: false },
-    { type: 'color', label: 'Wall Color', expanded: false },
+    { type: 'wcolor', label: 'Wall Color', expanded: false },
     { type: 'wtexture', label: 'Wall Texture', expanded: false },
+    { type: 'fcolor', label: 'Floor Color', expanded: false },
     { type: 'ftexture', label: 'Floor Texture', expanded: false }
   ];
 
@@ -152,6 +154,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       roomVertexIndices: this.editorStateService.roomVertexIndices,
       roomMetadata: this.editorStateService.roomMetadata,
       wallAppearance: this.editorStateService.wallAppearance,
+      floorAppearance: this.editorStateService.floorAppearance,
       editorStep: this.editorStateService.editorStep
     };
     if (this.isNewProject) {
@@ -267,9 +270,24 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.roomWallService.applyWallTextureToMesh(wall, this.wallTexture || null, side);
   }
 
+  onFloorColorPicked(ev: { hex: string; num: number }) {
+    this.floorColor = ev.hex;
+    this.applyFloorColor();
+  }
+
+  applyFloorColor() {
+    const idx = this.selectedRoomIndex;
+    if (idx < 0) return;
+    const mesh = this.editorStateService.roomMeshes[idx];
+    const roomKey = idx.toString();
+    this.roomWallService.applyFloorColorToMesh(mesh, this.floorColor, roomKey);
+  }
+
   applyFloorTexture() {
-    // TODO: Implement floor texture application logic
-    // For now, just log the selected texture
-    console.log('Selected floor texture:', this.floorTexture);
+    const idx = this.selectedRoomIndex;
+    if (idx < 0) return;
+    const mesh = this.editorStateService.roomMeshes[idx];
+    const roomKey = idx.toString();
+    this.roomWallService.applyFloorTextureToMesh(mesh, this.floorTexture || null, roomKey);
   }
 }

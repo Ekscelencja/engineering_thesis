@@ -35,6 +35,11 @@ const wallAppearanceSchema = new mongoose.Schema({
   hole: { color: String, texture: String }
 }, { _id: false });
 
+const floorAppearanceSchema = new mongoose.Schema({
+  color: String,
+  texture: String
+}, { _id: false });
+
 const roomMetadataSchema = new mongoose.Schema({
   name: String,
   type: String,
@@ -58,6 +63,11 @@ const projectSchema = new mongoose.Schema({
   wallAppearance: {
     type: Map,
     of: wallAppearanceSchema,
+    default: {}
+  },
+  floorAppearance: {
+    type: Map,
+    of: floorAppearanceSchema,
     default: {}
   },
   editorStep: { type: Number, default: 1, min: 1, max: 3 } // 1=Rooms, 2=Walls&Features, 3=Furnishing

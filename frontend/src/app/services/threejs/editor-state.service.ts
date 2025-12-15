@@ -54,4 +54,5 @@ export class EditorStateService {
     bottom?: { color?: string; texture?: string },
     hole?: { color?: string; texture?: string }
   }> = {};
+  public floorAppearance: Record<string, { color?: string; texture?: string }> = {};
 }

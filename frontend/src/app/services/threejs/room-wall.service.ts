@@ -355,6 +355,9 @@ export class RoomWallService {
     // Restore wallAppearance from data
     this.editorState.wallAppearance = data.wallAppearance || {};
 
+    // Restore floorAppearance from data
+    this.editorState.floorAppearance = data.floorAppearance || {};
+
     for (let i = 0; i < this.editorState.roomVertexIndices.length; i++) {
       const indices = this.editorState.roomVertexIndices[i];
       const verts = indices.map(idx => this.editorState.globalVertices[idx]);
@@ -367,6 +370,23 @@ export class RoomWallService {
       mesh.rotation.x = -Math.PI / 2; // Ensure floor is on XZ plane
       this.threeRender.scene.add(mesh);
       this.editorState.roomMeshes.push(mesh);
+
+      // After mesh is created and added to scene:
+      const roomKey = i.toString();
+      const appearance = this.editorState.floorAppearance[roomKey];
+      if (appearance) {
+        const mat = mesh.material as THREE.MeshStandardMaterial;
+        if (appearance.color) mat.color = new THREE.Color(appearance.color);
+        if (appearance.texture) {
+          const texLoader = new THREE.TextureLoader();
+          const url = `assets/textures/${appearance.texture}.jpg`;
+          const tex = texLoader.load(url);
+          tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+          mat.map = tex;
+          mat.color = new THREE.Color(0xffffff); 
+        }
+        mat.needsUpdate = true;
+      }
     }
     if (this.editorState.editorStep > 1) {
       console.log('Regenerating walls after import');
@@ -459,7 +479,7 @@ export class RoomWallService {
         console.log(`Restoring appearance for wall ${wallKey} side ${side}`);
         if (!sideMap.hasOwnProperty(side)) continue;
         const mat = (wall.material as THREE.Material[])[sideMap[side as WallSide]] as THREE.MeshStandardMaterial;
-        if (data.color) {mat.color = new THREE.Color(data.color); console.log(`Applied color ${data.color} to wall ${wallKey} side ${side}`);}
+        if (data.color) { mat.color = new THREE.Color(data.color); console.log(`Applied color ${data.color} to wall ${wallKey} side ${side}`); }
         if (data.texture) {
           const texLoader = new THREE.TextureLoader();
           const url = `assets/textures/${data.texture}.jpg`;
@@ -554,5 +574,42 @@ export class RoomWallService {
       };
     }
   }
+
+  applyFloorColorToMesh(roomMesh: THREE.Mesh, colorHex: string, roomKey: string) {
+    const mat = roomMesh.material as THREE.MeshStandardMaterial;
+    mat.color = new THREE.Color(colorHex);
+    mat.needsUpdate = true;
+    this.editorState.floorAppearance[roomKey] = {
+      ...this.editorState.floorAppearance[roomKey],
+      color: colorHex
+    };
+  }
+
+  applyFloorTextureToMesh(roomMesh: THREE.Mesh, textureId: string | null, roomKey: string) {
+  const mat = roomMesh.material as THREE.MeshStandardMaterial;
+  if (!textureId) {
+    mat.map = null;
+  } else {
+    const texLoader = new THREE.TextureLoader();
+    const url = `assets/textures/${textureId}.jpg`;
+    const tex = texLoader.load(
+      url,
+      () => console.log('Texture loaded:', url),
+      undefined,
+      (err) => {
+        console.error('Texture load error:', url, err);
+        // Optionally set a fallback color or texture here
+      }
+    );
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    mat.map = tex;
+    mat.color = new THREE.Color(0xffffff); 
+  }
+  mat.needsUpdate = true;
+  this.editorState.floorAppearance[roomKey] = {
+    ...this.editorState.floorAppearance[roomKey],
+    texture: textureId || ''
+  };
+}
 }
 

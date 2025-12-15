@@ -84,7 +84,7 @@
 							</ng-container>
 
 							<!-- Wall Color -->
-							<ng-container *ngIf="row.type === 'color'">
+							<ng-container *ngIf="row.type === 'wcolor'">
 								<label>Wall Color:</label>
 								<app-color-picker [value]="wallColor" (valueChange)="onWallColorPicked($event)">
 								</app-color-picker>
@@ -98,6 +98,13 @@
 									<option value="wallpaper_1">Wallpaper 1</option>
 									<option value="wallpaper_2">Wallpaper 2</option>
 								</select>
+							</ng-container>
+
+							<!-- Floor Color -->
+							<ng-container *ngIf="row.type === 'fcolor'">
+								<label>Floor Color:</label>
+								<app-color-picker [value]="floorColor" (valueChange)="onFloorColorPicked($event)">
+								</app-color-picker>
 							</ng-container>
 
 							<!-- Floor Texture -->
