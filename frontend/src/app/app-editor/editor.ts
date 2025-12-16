@@ -18,6 +18,7 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { StepperSelectionEvent } from '@angular/cdk/stepper';
 import { MatTableModule } from '@angular/material/table';
 import { ColorPickerComponent } from './color-picker/color-picker';
+import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
 
 @Pipe({ name: 'numberToColor' })
 export class NumberToColorPipe implements PipeTransform {
@@ -42,7 +43,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   public wallTexture: string = '';
   public floorColor: string = '#888888';
   public floorTexture: string = '';
-  public wallTextureTileSizeM = 1; // 1m x 1m tiles by default
+  public wallTextureTileSizeM = 1;
+  public furnitureAssets: FurnitureAsset[] = [];
 
   wallFeatureRows = [
     { type: 'features', label: 'Wall Features', expanded: false },
@@ -89,7 +91,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     private roomWallService: RoomWallService,
     private projectService: ProjectService,
     //private projectIOService: ProjectIOService,
-    public editorEventsService: EditorEventsService
+    public editorEventsService: EditorEventsService,
+    private assetsService: AssetsService
   ) { }
 
   ngAfterViewInit() {
@@ -187,6 +190,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
         this.roomWallService.hideAllWalls();
       } else {
         this.roomWallService.regenerateAllWalls();
+      }
+      if (newStep === 3) {
+        this.assetsService.getFurnitureAssets().subscribe(assets => {
+          this.furnitureAssets = assets;
+          this.cdr.detectChanges();
+        });
       }
     }
   }

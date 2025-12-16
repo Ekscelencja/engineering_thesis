@@ -139,6 +139,12 @@
 		<button mat-flat-button color="basic" (click)="removeSofa()" [disabled]="!sofaModel">Remove Sofa</button>
 		<span *ngIf="isPlacingSofa" style="margin-left:12px;color:#d32f2f;font-weight:bold;">Loading sofa
 			model...</span>
+		<div class="furniture-assets-gallery">
+			<div *ngFor="let asset of furnitureAssets" class="furniture-asset-item"
+				[title]="'Place ' + asset.name">
+				<p>{{ asset.name }}</p>
+			</div>
+		</div>
 	</ng-container>
 </div>
 
