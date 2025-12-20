@@ -19,6 +19,7 @@ import { StepperSelectionEvent } from '@angular/cdk/stepper';
 import { MatTableModule } from '@angular/material/table';
 import { ColorPickerComponent } from './color-picker/color-picker';
 import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
+import { FurniturePreviewComponent } from '../furniture-preview/furniture-preview';
 
 @Pipe({ name: 'numberToColor' })
 export class NumberToColorPipe implements PipeTransform {
@@ -33,18 +34,30 @@ export class NumberToColorPipe implements PipeTransform {
   standalone: true,
   templateUrl: './editor.html',
   styleUrls: ['./editor.scss'],
-  imports: [CommonModule, FormsModule, MatButtonModule, MatStepperModule, MatInputModule, MatIconModule, MatTableModule, NumberToColorPipe, ColorPickerComponent]
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatButtonModule,
+    MatStepperModule,
+    MatInputModule,
+    MatIconModule,
+    MatTableModule,
+    NumberToColorPipe,
+    ColorPickerComponent,
+    FurniturePreviewComponent
+  ]
 })
 export class EditorComponent implements AfterViewInit, OnDestroy {
-  // --- Sofa Placement Proof-of-Concept ---
-  protected sofaModel: THREE.Group | null = null;
-  public isPlacingSofa: boolean = false;
   public wallColor: string = '#cccccc';
   public wallTexture: string = '';
   public floorColor: string = '#888888';
   public floorTexture: string = '';
   public wallTextureTileSizeM = 1;
   public furnitureAssets: FurnitureAsset[] = [];
+  public isPlacingFurniture: boolean = false;
+  public placingFurnitureAsset: FurnitureAsset | null = null;
+  public placingFurnitureModel: THREE.Object3D | null = null;
+  public placedFurniture: { asset: FurnitureAsset, position: THREE.Vector3, rotation: number }[] = [];
 
   wallFeatureRows = [
     { type: 'features', label: 'Wall Features', expanded: false },
@@ -110,6 +123,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       window.addEventListener('keyup', this.editorEventsService.onKeyUp);
       window.addEventListener('keypress', this.editorEventsService.onKeyPress);
     });
+    this.canvasRef.nativeElement.addEventListener('mousemove', this.onCanvasMouseMove.bind(this));
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -205,55 +219,13 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.editorEventsService.initFeaturePreview();
   }
 
-  placeSofa() {
-    this.isPlacingSofa = true;
-
-    const mtlLoader = new MTLLoader();
-    mtlLoader.setPath('assets/3d_objects/sofa_1/');
-    mtlLoader.load('couch.mtl', (materials) => {
-      materials.preload();
-      const objLoader = new OBJLoader();
-      objLoader.setMaterials(materials);
-      objLoader.setPath('assets/3d_objects/sofa_1/');
-      objLoader.load('couch.obj', (object) => {
-        object.scale.set(0.01, 0.01, 0.01); // Adjust scale as needed
-        object.position.set(0, 0, 0);
-        this.threeRenderService.scene.add(object);
-        this.sofaModel = object;
-        console.log('Sofa loaded successfully');
-      }, undefined, (error) => {
-        console.error('Error loading OBJ:', error);
-      });
-    }, undefined, (error) => {
-      console.error('Error loading MTL:', error);
-    });
-  }
-
-  removeSofa() {
-    if (this.sofaModel) {
-      this.threeRenderService.scene.remove(this.sofaModel);
-      this.sofaModel = null;
-      this.isPlacingSofa = false;
-    }
-  }
-
   onCanvasClick(event: MouseEvent) {
-    if (this.isPlacingSofa && this.sofaModel) {
-      // Raycast to find position on floor
-      const canvas = this.canvasRef.nativeElement;
-      const mouse = new THREE.Vector2(
-        (event.offsetX / canvas.width) * 2 - 1,
-        -(event.offsetY / canvas.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, this.threeRenderService.camera);
-      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-      const intersection = new THREE.Vector3();
-      raycaster.ray.intersectPlane(plane, intersection);
-      if (intersection) {
-        this.sofaModel.position.set(intersection.x, 0, intersection.z);
-      }
-      this.isPlacingSofa = false;
+    if (this.isPlacingFurniture && this.placingFurnitureModel) {
+      // Finalize placement: optionally clone or keep reference
+      this.isPlacingFurniture = false;
+      this.placingFurnitureAsset = null;
+      this.placingFurnitureModel = null;
+      // Optionally: store placed furniture in a list for saving
       return;
     }
     this.editorEventsService.handleWallClick(event);
@@ -298,5 +270,76 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const mesh = this.editorStateService.roomMeshes[idx];
     const roomKey = idx.toString();
     this.roomWallService.applyFloorTextureToMesh(mesh, this.floorTexture || null, roomKey);
+  }
+
+  startPlacingFurniture(asset: FurnitureAsset) {
+    this.isPlacingFurniture = true;
+    this.placingFurnitureAsset = asset;
+
+    // Remove previous preview model if any
+    if (this.placingFurnitureModel) {
+      this.threeRenderService.scene.remove(this.placingFurnitureModel);
+      this.placingFurnitureModel = null;
+    }
+
+    // Load the model for placement preview
+    const basePath = `assets/3d_objects/${asset.folder}/`;
+    if (asset.mtl) {
+      const mtlLoader = new MTLLoader();
+      mtlLoader.setPath(basePath);
+      mtlLoader.load(asset.mtl, (materials) => {
+        materials.preload();
+        const objLoader = new OBJLoader();
+        objLoader.setMaterials(materials);
+        objLoader.setPath(basePath);
+        objLoader.load(asset.obj, (object) => {
+          this.preparePlacementModel(object, asset.scale);
+        });
+      });
+    } else {
+      const objLoader = new OBJLoader();
+      objLoader.setPath(basePath);
+      objLoader.load(asset.obj, (object) => {
+        this.preparePlacementModel(object, asset.scale);
+      });
+    }
+  }
+
+  private preparePlacementModel(object: THREE.Object3D, scale: number) {
+    // Center and scale as in preview
+    const box = new THREE.Box3().setFromObject(object);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const targetSize = 1.2;
+    const scaleFactor = (scale || 1) * (targetSize / maxDim);
+    object.scale.setScalar(scaleFactor);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    object.position.sub(center);
+    object.position.y -= box.min.y * scaleFactor;
+
+    this.threeRenderService.scene.add(object);
+    this.placingFurnitureModel = object;
+  }
+
+  onCanvasMouseMove(event: MouseEvent) {
+    if (this.isPlacingFurniture && this.placingFurnitureModel) {
+      const canvas = this.canvasRef.nativeElement;
+      const mouse = new THREE.Vector2(
+        (event.offsetX / canvas.width) * 2 - 1,
+        -(event.offsetY / canvas.height) * 2 + 1
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, this.threeRenderService.camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const intersection = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, intersection);
+      if (intersection) {
+        this.placingFurnitureModel.position.x = intersection.x;
+        this.placingFurnitureModel.position.z = intersection.z;
+        // Keep Y as set by preparePlacementModel
+      }
+    }
   }
 }
