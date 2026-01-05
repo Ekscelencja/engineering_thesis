@@ -172,6 +172,11 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       roomMetadata: this.editorStateService.roomMetadata,
       wallAppearance: this.editorStateService.wallAppearance,
       floorAppearance: this.editorStateService.floorAppearance,
+      furniture: this.placedFurniture.map(f => ({
+        assetId: f.asset.folder, // or f.asset._id if using DB ids
+        position: { x: f.position.x, y: f.position.y, z: f.position.z },
+        rotation: f.rotation
+      })),
       editorStep: this.editorStateService.editorStep
     };
     if (this.isNewProject) {
@@ -221,7 +226,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   onCanvasClick(event: MouseEvent) {
     if (this.isPlacingFurniture && this.placingFurnitureModel) {
+      console.log('Placed furniture:', this.placingFurnitureAsset, 'at', this.placingFurnitureModel.position);
       // Finalize placement: optionally clone or keep reference
+      this.placedFurniture.push({
+        asset: this.placingFurnitureAsset!,
+        position: this.placingFurnitureModel.position.clone(),
+        rotation: this.placingFurnitureModel.rotation.y
+      });
+      // Clear placement state
       this.isPlacingFurniture = false;
       this.placingFurnitureAsset = null;
       this.placingFurnitureModel = null;
@@ -312,12 +324,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
     const targetSize = 1.2;
-    const scaleFactor = (scale || 1) * (targetSize / maxDim);
-    object.scale.setScalar(scaleFactor);
+    object.scale.setScalar(scale || 1);
     const center = new THREE.Vector3();
     box.getCenter(center);
     object.position.sub(center);
-    object.position.y -= box.min.y * scaleFactor;
+    const newBox = new THREE.Box3().setFromObject(object);
+    object.position.y -= newBox.min.y;
 
     this.threeRenderService.scene.add(object);
     this.placingFurnitureModel = object;

@@ -18,6 +18,11 @@ export interface ProjectData {
     hole?: { color?: string; texture?: string }
   }>;
   floorAppearance?: Record<string, { color?: string; texture?: string }>;
+  furniture?: {
+    assetId: string;
+    position: { x: number; y: number; z: number };
+    rotation: number;
+  }[];
   editorStep?: 1 | 2 | 3; // 1=Rooms, 2=Walls/Features, 3=Furnishing
 }
 

@@ -62,6 +62,11 @@ const projectSchema = new mongoose.Schema({
     of: floorAppearanceSchema,
     default: {}
   },
+  furniture: [{
+    assetId: { type: String, required: true }, // or ObjectId if you use Mongo refs
+    position: { x: Number, y: Number, z: Number },
+    rotation: { type: Number, default: 0 }
+  }],
   editorStep: { type: Number, default: 1, min: 1, max: 3 } // 1=Rooms, 2=Walls&Features, 3=Furnishing
 }, { timestamps: true });
 

@@ -4,7 +4,7 @@ import { EditorStateService } from './editor-state.service';
 import { ThreeRenderService } from './three-render.service';
 import { calculatePolygonArea, findOrAddGlobalVertex, clearDrawingVertexHighlights, canonicalWallKey } from '../../utils/geometry-utils';
 import { WallFeature, WallSide, sideMap } from '../../models/room-feature.model';
-import { C } from '@angular/cdk/keycodes';
+import { FurnitureService } from './furniture.service';
 
 @Injectable({
   providedIn: 'root'
@@ -15,7 +15,8 @@ export class RoomWallService {
 
   constructor(
     private editorState: EditorStateService,
-    private threeRender: ThreeRenderService
+    private threeRender: ThreeRenderService,
+    private furnitureService: FurnitureService
   ) { }
 
   /**
@@ -383,7 +384,7 @@ export class RoomWallService {
           const tex = texLoader.load(url);
           tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
           mat.map = tex;
-          mat.color = new THREE.Color(0xffffff); 
+          mat.color = new THREE.Color(0xffffff);
         }
         mat.needsUpdate = true;
       }
@@ -391,6 +392,10 @@ export class RoomWallService {
     if (this.editorState.editorStep > 1) {
       console.log('Regenerating walls after import');
       this.regenerateAllWalls();
+    }
+    if(this.editorState.editorStep > 2) {
+      console.log('Restoring furniture after import');
+      this.furnitureService.loadFurnitureIntoScene(data.furniture, this.threeRender.scene);
     }
   }
 
@@ -586,30 +591,30 @@ export class RoomWallService {
   }
 
   applyFloorTextureToMesh(roomMesh: THREE.Mesh, textureId: string | null, roomKey: string) {
-  const mat = roomMesh.material as THREE.MeshStandardMaterial;
-  if (!textureId) {
-    mat.map = null;
-  } else {
-    const texLoader = new THREE.TextureLoader();
-    const url = `assets/textures/${textureId}.jpg`;
-    const tex = texLoader.load(
-      url,
-      () => console.log('Texture loaded:', url),
-      undefined,
-      (err) => {
-        console.error('Texture load error:', url, err);
-        // Optionally set a fallback color or texture here
-      }
-    );
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-    mat.map = tex;
-    mat.color = new THREE.Color(0xffffff); 
+    const mat = roomMesh.material as THREE.MeshStandardMaterial;
+    if (!textureId) {
+      mat.map = null;
+    } else {
+      const texLoader = new THREE.TextureLoader();
+      const url = `assets/textures/${textureId}.jpg`;
+      const tex = texLoader.load(
+        url,
+        () => console.log('Texture loaded:', url),
+        undefined,
+        (err) => {
+          console.error('Texture load error:', url, err);
+          // Optionally set a fallback color or texture here
+        }
+      );
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      mat.map = tex;
+      mat.color = new THREE.Color(0xffffff);
+    }
+    mat.needsUpdate = true;
+    this.editorState.floorAppearance[roomKey] = {
+      ...this.editorState.floorAppearance[roomKey],
+      texture: textureId || ''
+    };
   }
-  mat.needsUpdate = true;
-  this.editorState.floorAppearance[roomKey] = {
-    ...this.editorState.floorAppearance[roomKey],
-    texture: textureId || ''
-  };
-}
 }
 
