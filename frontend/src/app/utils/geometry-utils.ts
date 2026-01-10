@@ -110,3 +110,39 @@ export function canonicalWallKey(a: {x: number, z: number}, b: {x: number, z: nu
     return `${b.x},${b.z}|${a.x},${a.z}`;
   }
 }
+
+export function isPointInPolygon(point: {x: number, z: number}, polygon: {x: number, z: number}[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, zi = polygon[i].z;
+    const xj = polygon[j].x, zj = polygon[j].z;
+    const intersect = ((zi > point.z) !== (zj > point.z)) &&
+      (point.x < (xj - xi) * (point.z - zi) / ((zj - zi) || 1e-10) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+export function doesAABBIntersectLine(aabb: {min: {x: number, z: number}, max: {x: number, z: number}}, p1: {x: number, z: number}, p2: {x: number, z: number}): boolean {
+  const inside = (p: {x: number, z: number}) =>
+    p.x >= aabb.min.x && p.x <= aabb.max.x && p.z >= aabb.min.z && p.z <= aabb.max.z;
+  if (inside(p1) || inside(p2)) return true;
+
+  const boxEdges = [
+    [{x: aabb.min.x, z: aabb.min.z}, {x: aabb.max.x, z: aabb.min.z}],
+    [{x: aabb.max.x, z: aabb.min.z}, {x: aabb.max.x, z: aabb.max.z}],
+    [{x: aabb.max.x, z: aabb.max.z}, {x: aabb.min.x, z: aabb.max.z}],
+    [{x: aabb.min.x, z: aabb.max.z}, {x: aabb.min.x, z: aabb.min.z}]
+  ];
+  for (const [q1, q2] of boxEdges) {
+    if (segmentsIntersect2D(p1, p2, q1, q2)) return true;
+  }
+  return false;
+}
+
+export function segmentsIntersect2D(p1: {x: number, z: number}, p2: {x: number, z: number}, q1: {x: number, z: number}, q2: {x: number, z: number}): boolean {
+  function ccw(a: any, b: any, c: any) {
+    return (c.z - a.z) * (b.x - a.x) > (b.z - a.z) * (c.x - a.x);
+  }
+  return (ccw(p1, q1, q2) !== ccw(p2, q1, q2)) && (ccw(p1, p2, q1) !== ccw(p1, p2, q2));
+}

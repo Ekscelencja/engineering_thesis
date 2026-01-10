@@ -1,4 +1,3 @@
-
 import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, NgZone, ChangeDetectorRef, Input, SimpleChanges, Output, EventEmitter, Pipe, PipeTransform } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -6,7 +5,6 @@ import { EditorStateService } from '../services/threejs/editor-state.service';
 import { ProjectService, ProjectData } from '../services/api/project.service';
 import { ThreeRenderService } from '../services/threejs/three-render.service';
 import { RoomWallService } from '../services/threejs/room-wall.service';
-import { ProjectIOService } from '../services/api/project-io.service';
 import { EditorEventsService } from '../services/threejs/editor-events.service';
 import { MatButtonModule } from '@angular/material/button';
 import { MatStepperModule, MatStepper } from '@angular/material/stepper';
@@ -20,7 +18,7 @@ import { MatTableModule } from '@angular/material/table';
 import { ColorPickerComponent } from './color-picker/color-picker';
 import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
 import { FurniturePreviewComponent } from '../furniture-preview/furniture-preview';
-
+import { isPointInPolygon, doesAABBIntersectLine } from '../utils/geometry-utils';
 @Pipe({ name: 'numberToColor' })
 export class NumberToColorPipe implements PipeTransform {
   transform(value: number): string {
@@ -71,7 +69,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   @ViewChild('stepper') stepperRef?: MatStepper;
 
   actionPanelExpanded: boolean = true;
-  isNewProject: boolean = false;
+  isNewProject: boolean = true;
   clientId: string | null = null;
   projectTitle: string | null = null;
   @Input() userType: string | null = null;
@@ -80,6 +78,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   @Input() newProjectTitle: string | null = null;
   @Input() projectData: Partial<ProjectData> | null = null;
   @Output() closeEditor = new EventEmitter<void>();
+
+  private suppressStepperSelectionChange = false;
 
   public get roomMetadata() {
     return this.editorStateService.roomMetadata;
@@ -94,6 +94,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   public get editorStep() {
     return this.editorStateService.editorStep;
+  }
+
+  public step1Completed = false;
+  public step2Completed = false;
+
+  private applyCompletionFromStep(step: 1 | 2 | 3) {
+    this.step1Completed = step >= 2;
+    this.step2Completed = step >= 3;
   }
 
   constructor(
@@ -128,26 +136,38 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['projectId'] && this.projectId) {
+      console.log('EditorComponent detected projectId change:', this.projectId);
       this.projectService.loadProject(this.projectId).subscribe({
         next: (data) => {
           this.isNewProject = false;
-          this.editorStateService.editorStep = data.editorStep || 1;
-          this.roomWallService.rebuildFromData(data);
           this.projectTitle = data.title;
           this.clientId = data.client;
+
+          console.log('Loaded project data:', data);
+
+          const step = ((data.editorStep || 1) as 1 | 2 | 3);
+          this.editorStateService.editorStep = step;
+
+          this.roomWallService.rebuildFromData(data);
+          console.log('Rebuilt scene from project data.');
+
+          // IMPORTANT: set completion flags BEFORE selecting the step
+          this.applyCompletionFromStep(step);
+          this.cdr.detectChanges();
+
+          // select after completion is applied
           setTimeout(() => {
             if (this.stepperRef) {
-              this.stepperRef.selectedIndex = this.editorStateService.editorStep - 1;
+              this.stepperRef.selectedIndex = step - 1;
+              this.cdr.detectChanges();
             }
-            this.cdr.detectChanges();
-          });
+          }, 0);
+
+
+          this.hydratePlacedFurnitureFromProject(data);
         },
         error: (err) => alert('Load failed: ' + err.message)
       });
-    }
-    if (changes['newProjectTitle'] && this.newProjectTitle && this.newProjectClientId) {
-      this.isNewProject = true;
-      console.log('Creating new project with title:', this.newProjectTitle, 'and clientId:', this.newProjectClientId);
     }
   }
 
@@ -164,6 +184,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   public saveProjectToServer() {
+    console.log(this.isNewProject ? 'Creating new project...' : 'Updating existing project...');
     const project: ProjectData = {
       title: this.isNewProject ? this.newProjectTitle! : this.projectTitle!,
       client: this.isNewProject ? this.newProjectClientId! : this.clientId!,
@@ -201,22 +222,94 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.closeEditor.emit();
   }
 
-  onStepperSelectionChange(event: StepperSelectionEvent) {
-    const newStep = event.selectedIndex + 1;
-    if (this.editorStep !== newStep) {
-      this.editorStateService.editorStep = newStep as 1 | 2 | 3;
-      if (newStep === 1) {
-        this.roomWallService.hideAllWalls();
-      } else {
-        this.roomWallService.regenerateAllWalls();
-      }
-      if (newStep === 3) {
-        this.assetsService.getFurnitureAssets().subscribe(assets => {
-          this.furnitureAssets = assets;
-          this.cdr.detectChanges();
-        });
-      }
+  public goToStep(step: 1 | 2 | 3): void {
+    // Always sync state + UI. Do NOT early-return.
+    this.editorStateService.editorStep = step;
+
+    // keep your scene logic in sync
+    if (step === 1) this.roomWallService.hideAllWalls();
+    else this.roomWallService.regenerateAllWalls();
+
+    // step 3 assets
+    if (step === 3 && this.furnitureAssets.length === 0) {
+      this.assetsService.getFurnitureAssets().subscribe(assets => {
+        this.furnitureAssets = assets;
+        this.cdr.detectChanges();
+      });
     }
+
+    // keep stepper header in sync (guard selectionChange recursion)
+    if (this.stepperRef) {
+      this.suppressStepperSelectionChange = true;
+      this.stepperRef.selectedIndex = step - 1;
+
+      // release guard after the stepper processes the change
+      setTimeout(() => {
+        this.suppressStepperSelectionChange = false;
+      }, 0);
+    }
+
+    this.cdr.detectChanges();
+  }
+
+  public onNextFromStep1(): void {
+    // mark step 1 completed BEFORE moving
+    this.step1Completed = true;
+    this.editorStateService.editorStep = 2;
+    this.roomWallService.regenerateAllWalls();
+    this.cdr.detectChanges();
+
+    queueMicrotask(() => this.stepperRef?.next());
+  }
+
+  public onBackToStep1(): void {
+    this.editorStateService.editorStep = 1;
+    this.roomWallService.hideAllWalls();
+    this.cdr.detectChanges();
+
+    queueMicrotask(() => this.stepperRef?.previous());
+  }
+
+  public onNextFromStep2(): void {
+    this.step2Completed = true;
+    this.editorStateService.editorStep = 3;
+    this.roomWallService.regenerateAllWalls();
+
+    if (this.furnitureAssets.length === 0) {
+      this.assetsService.getFurnitureAssets().subscribe(assets => {
+        this.furnitureAssets = assets;
+        this.cdr.detectChanges();
+      });
+    }
+
+    this.cdr.detectChanges();
+    queueMicrotask(() => this.stepperRef?.next());
+  }
+
+  public onBackToStep2(): void {
+    this.editorStateService.editorStep = 2;
+    this.roomWallService.regenerateAllWalls();
+    this.cdr.detectChanges();
+
+    queueMicrotask(() => this.stepperRef?.previous());
+  }
+
+  onStepperSelectionChange(event: StepperSelectionEvent) {
+    // keep state in sync if user clicks headers
+    const newStep = (event.selectedIndex + 1) as 1 | 2 | 3;
+    this.editorStateService.editorStep = newStep;
+
+    if (newStep === 1) this.roomWallService.hideAllWalls();
+    else this.roomWallService.regenerateAllWalls();
+
+    if (newStep === 3 && this.furnitureAssets.length === 0) {
+      this.assetsService.getFurnitureAssets().subscribe(assets => {
+        this.furnitureAssets = assets;
+        this.cdr.detectChanges();
+      });
+    }
+
+    this.cdr.detectChanges();
   }
 
   startPlacingFeature(type: 'window' | 'door') {
@@ -335,6 +428,22 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.placingFurnitureModel = object;
   }
 
+  private hydratePlacedFurnitureFromProject(data: ProjectData): void {
+    const list = (data as any)?.furniture as { assetId: string; position: { x: number; y: number; z: number }; rotation: number }[] | undefined;
+    if (!list || list.length === 0) {
+      this.placedFurniture = [];
+      return;
+    }
+
+    // Build placedFurniture using a minimal asset object if we don't have furnitureAssets loaded yet.
+    // We only need `folder` for saving back to DB.
+    this.placedFurniture = list.map(f => ({
+      asset: ({ folder: f.assetId } as unknown as FurnitureAsset),
+      position: new THREE.Vector3(f.position.x, f.position.y, f.position.z),
+      rotation: f.rotation ?? 0
+    }));
+  }
+
   onCanvasMouseMove(event: MouseEvent) {
     if (this.isPlacingFurniture && this.placingFurnitureModel) {
       const canvas = this.canvasRef.nativeElement;
@@ -348,9 +457,77 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       const intersection = new THREE.Vector3();
       raycaster.ray.intersectPlane(plane, intersection);
       if (intersection) {
-        this.placingFurnitureModel.position.x = intersection.x;
-        this.placingFurnitureModel.position.z = intersection.z;
-        // Keep Y as set by preparePlacementModel
+        const point = { x: intersection.x, z: intersection.z };
+        let insideAnyRoom = false;
+        for (const indices of this.editorStateService.roomVertexIndices) {
+          const verts = indices.map(idx => this.editorStateService.globalVertices[idx]);
+          if (isPointInPolygon(point, verts)) {
+            insideAnyRoom = true;
+            break;
+          }
+        }
+        if (insideAnyRoom) {
+          // --- Wall collision check ---
+          // Compute AABB of furniture at intended position
+          const box = new THREE.Box3().setFromObject(this.placingFurnitureModel);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const min = { x: intersection.x + box.min.x, z: intersection.z + box.min.z };
+          const max = { x: intersection.x + box.max.x, z: intersection.z + box.max.z };
+          let collision = false;
+          // For each wall segment
+          for (const indices of this.editorStateService.roomVertexIndices) {
+            for (let i = 0; i < indices.length; i++) {
+              const a = this.editorStateService.globalVertices[indices[i]];
+              const b = this.editorStateService.globalVertices[indices[(i + 1) % indices.length]];
+              if (doesAABBIntersectLine({ min, max }, a, b)) {
+                collision = true;
+                break;
+              }
+            }
+            if (collision) break;
+          }
+          if (!collision) {
+            const SNAP_DISTANCE = 0.3; // Adjust as needed
+
+            let snapWall: { a: { x: number, z: number }, b: { x: number, z: number }, dist: number, closest: { x: number, z: number } } | null = null;
+
+            for (const indices of this.editorStateService.roomVertexIndices) {
+              for (let i = 0; i < indices.length; i++) {
+                const a = this.editorStateService.globalVertices[indices[i]];
+                const b = this.editorStateService.globalVertices[indices[(i + 1) % indices.length]];
+                // Closest point on wall to intended position
+                const wallVec = { x: b.x - a.x, z: b.z - a.z };
+                const wallLenSq = wallVec.x * wallVec.x + wallVec.z * wallVec.z;
+                let t = ((point.x - a.x) * wallVec.x + (point.z - a.z) * wallVec.z) / (wallLenSq || 1e-10);
+                t = Math.max(0, Math.min(1, t));
+                const closest = { x: a.x + t * wallVec.x, z: a.z + t * wallVec.z };
+                const dist = Math.hypot(point.x - closest.x, point.z - closest.z);
+                if (dist < SNAP_DISTANCE && (!snapWall || dist < snapWall.dist)) {
+                  snapWall = { a, b, dist, closest };
+                }
+              }
+            }
+
+            if (snapWall) {
+              // Snap position
+              this.placingFurnitureModel.position.x = snapWall.closest.x;
+              this.placingFurnitureModel.position.z = snapWall.closest.z;
+
+              // Snap rotation: make the back face the wall
+              const dx = snapWall.b.x - snapWall.a.x;
+              const dz = snapWall.b.z - snapWall.a.z;
+              const wallAngle = Math.atan2(dz, dx);
+              // Furniture "back" is usually -Z, so rotate to face away from wall
+              this.placingFurnitureModel.rotation.y = wallAngle + Math.PI / 2;
+            } else {
+              // No snap: use original logic
+              this.placingFurnitureModel.position.x = intersection.x;
+              this.placingFurnitureModel.position.z = intersection.z;
+            }
+          }
+          // Optionally: else, show a warning/visual cue
+        }
       }
     }
   }

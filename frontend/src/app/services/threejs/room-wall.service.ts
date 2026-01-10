@@ -389,6 +389,7 @@ export class RoomWallService {
         mat.needsUpdate = true;
       }
     }
+    console.log('Restored rooms from imported data. editorStep=', this.editorState.editorStep);
     if (this.editorState.editorStep > 1) {
       console.log('Regenerating walls after import');
       this.regenerateAllWalls();

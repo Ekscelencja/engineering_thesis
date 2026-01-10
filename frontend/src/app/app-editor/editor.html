@@ -1,23 +1,36 @@
 <canvas #canvas class="three-canvas" (click)="onCanvasClick($event)"></canvas>
 <!-- Material Stepper UI -->
-<mat-horizontal-stepper #stepper [selectedIndex]="editorStep-1" linear
-	(selectionChange)="onStepperSelectionChange($event)">
-	<mat-step label="Draw Rooms">
-		<ng-template matStepLabel>Draw Rooms</ng-template>
-		<div></div>
-		<button mat-button matStepperNext>Next</button>
-	</mat-step>
-	<mat-step label="Walls & Features">
-		<ng-template matStepLabel>Walls & Features</ng-template>
-		<div></div>
-		<button mat-button matStepperPrevious>Back</button>
-		<button mat-button matStepperNext>Next</button>
-	</mat-step>
-	<mat-step label="Furnishing">
-		<ng-template matStepLabel>Furnishing</ng-template>
-		<div></div>
-		<button mat-button matStepperPrevious>Back</button>
-	</mat-step>
+<mat-horizontal-stepper
+  *ngIf="editorStep"
+  #stepper
+  [linear]="true"
+  (selectionChange)="onStepperSelectionChange($event)">
+
+  <mat-step
+    [completed]="step1Completed"
+    [editable]="step1Completed"
+    [optional]="false">
+    <ng-template matStepLabel>Draw Rooms</ng-template>
+    <div></div>
+    <button mat-button (click)="onNextFromStep1()">Next</button>
+  </mat-step>
+
+  <mat-step
+    [completed]="step2Completed"
+    [editable]="step2Completed"
+    [optional]="false">
+    <ng-template matStepLabel>Walls & Features</ng-template>
+    <div></div>
+    <button mat-button (click)="onBackToStep1()">Back</button>
+    <button mat-button (click)="onNextFromStep2()">Next</button>
+  </mat-step>
+
+  <mat-step [optional]="false">
+    <ng-template matStepLabel>Furnishing</ng-template>
+    <div></div>
+    <button mat-button (click)="onBackToStep2()">Back</button>
+  </mat-step>
+
 </mat-horizontal-stepper>
 
 <!-- Right-side expandable panel for steps 2 & 3 -->
@@ -140,8 +153,9 @@
 		<span *ngIf="isPlacingSofa" style="margin-left:12px;color:#d32f2f;font-weight:bold;">Loading sofa
 			model...</span> -->
 		<div class="furniture-assets-gallery">
-			<div *ngFor="let asset of furnitureAssets" class="furniture-asset-item" (click)="startPlacingFurniture(asset)">
-   				 <app-furniture-preview [asset]="asset"></app-furniture-preview>
+			<div *ngFor="let asset of furnitureAssets" class="furniture-asset-item"
+				(click)="startPlacingFurniture(asset)">
+				<app-furniture-preview [asset]="asset"></app-furniture-preview>
 				<p>{{ asset.name }}</p>
 			</div>
 		</div>
