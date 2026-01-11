@@ -171,8 +171,8 @@ export class ProjectsPanelComponent implements OnInit {
   }
 
   viewProject(project: ProjectData) {
-    // Client: Logic to view a project
-    console.log('View project', project);
+    this.viewProject(project);
+    
   }
 
   giveFeedback(project: ProjectData) {

@@ -1,25 +1,71 @@
-import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, NgZone, ChangeDetectorRef, Input, SimpleChanges, Output, EventEmitter } from '@angular/core';
+import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, NgZone, ChangeDetectorRef, Input, SimpleChanges, Output, EventEmitter, Pipe, PipeTransform, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EditorStateService } from '../services/threejs/editor-state.service';
 import { ProjectService, ProjectData } from '../services/api/project.service';
 import { ThreeRenderService } from '../services/threejs/three-render.service';
 import { RoomWallService } from '../services/threejs/room-wall.service';
-import { ProjectIOService } from '../services/api/project-io.service';
 import { EditorEventsService } from '../services/threejs/editor-events.service';
 import { MatButtonModule } from '@angular/material/button';
+import { MatStepperModule, MatStepper } from '@angular/material/stepper';
+import { MatInputModule } from '@angular/material/input';
+import { MatIconModule } from '@angular/material/icon';
+import * as THREE from 'three';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { StepperSelectionEvent } from '@angular/cdk/stepper';
+import { MatTableModule } from '@angular/material/table';
+import { ColorPickerComponent } from './color-picker/color-picker';
+import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
+import { FurniturePreviewComponent } from '../furniture-preview/furniture-preview';
+
+@Pipe({ name: 'numberToColor' })
+export class NumberToColorPipe implements PipeTransform {
+  transform(value: number): string {
+    if (typeof value !== 'number') return '#000000';
+    return '#' + value.toString(16).padStart(6, '0');
+  }
+}
 
 @Component({
   selector: 'app-editor',
   standalone: true,
   templateUrl: './editor.html',
   styleUrls: ['./editor.scss'],
-  imports: [CommonModule, FormsModule, MatButtonModule]
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatButtonModule,
+    MatStepperModule,
+    MatInputModule,
+    MatIconModule,
+    MatTableModule,
+    NumberToColorPipe,
+    ColorPickerComponent,
+    FurniturePreviewComponent
+  ]
 })
-export class EditorComponent implements AfterViewInit, OnDestroy {
-  @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+export class EditorComponent implements OnInit, AfterViewInit, OnDestroy {
+  public wallColor: string = '';
+  public wallTexture: string = '';
+  public floorColor: string = '';
+  public floorTexture: string = '';
+  public furnitureAssets: FurnitureAsset[] = [];
+  public placedFurniture: { asset: FurnitureAsset, position: THREE.Vector3, rotation: number }[] = [];
 
-  isNewProject: boolean = false;
+  wallFeatureRows = [
+    { type: 'features', label: 'Wall Features', expanded: false },
+    { type: 'wcolor', label: 'Wall Color', expanded: false },
+    { type: 'wtexture', label: 'Wall Texture', expanded: false },
+    { type: 'fcolor', label: 'Floor Color', expanded: false },
+    { type: 'ftexture', label: 'Floor Texture', expanded: false }
+  ];
+
+  @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('stepper') stepperRef?: MatStepper;
+
+  actionPanelExpanded: boolean = true;
+  isNewProject: boolean = true;
   clientId: string | null = null;
   projectTitle: string | null = null;
   @Input() userType: string | null = null;
@@ -29,16 +75,48 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   @Input() projectData: Partial<ProjectData> | null = null;
   @Output() closeEditor = new EventEmitter<void>();
 
+  private suppressStepperSelectionChange = false;
+
+  public get roomMetadata() {
+    return this.editorStateService.roomMetadata;
+  }
+  public get selectedRoomMesh() {
+    return this.editorStateService.selectedRoomMesh;
+  }
+
+  public get selectedRoomIndex() {
+    return this.editorStateService.selectedRoomIndex;
+  }
+
+  public get editorStep() {
+    return this.editorStateService.editorStep;
+  }
+
+  public step1Completed = false;
+  public step2Completed = false;
+
+  private applyCompletionFromStep(step: 1 | 2 | 3) {
+    this.step1Completed = step >= 2;
+    this.step2Completed = step >= 3;
+  }
+
   constructor(
     private ngZone: NgZone,
     private cdr: ChangeDetectorRef,
-    private editorStateService: EditorStateService,
+    protected editorStateService: EditorStateService,
     public threeRenderService: ThreeRenderService,
     private roomWallService: RoomWallService,
     private projectService: ProjectService,
-    //private projectIOService: ProjectIOService,
-    public editorEventsService: EditorEventsService
+    public editorEventsService: EditorEventsService,
+    private assetsService: AssetsService
   ) { }
+  
+  ngOnInit() {
+    this.assetsService.getFurnitureAssets().subscribe(assets => {
+      this.furnitureAssets = assets;
+      this.cdr.detectChanges();
+    });
+  }
 
   ngAfterViewInit() {
     this.threeRenderService.init(this.canvasRef.nativeElement);
@@ -49,28 +127,36 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       this.editorEventsService.setCanvasListeners();
-      window.addEventListener('pointermove', this.editorEventsService.onHandlePointerMove);
-      window.addEventListener('pointerup', this.editorEventsService.onHandlePointerUp);
-      window.addEventListener('keydown', this.editorEventsService.onKeyDown);
-      window.addEventListener('keyup', this.editorEventsService.onKeyUp);
-      window.addEventListener('keypress', this.editorEventsService.onKeyPress);
     });
   }
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['projectId'] && this.projectId) {
       this.projectService.loadProject(this.projectId).subscribe({
-        next: (data) => (
-          this.isNewProject = false,
-          this.roomWallService.rebuildFromData(data),
-          this.projectTitle = data.title,
-          this.clientId = data.client),
+        next: (data) => {
+          this.isNewProject = false;
+          this.projectTitle = data.title;
+          this.clientId = data.client;
+
+          const step = ((data.editorStep || 1) as 1 | 2 | 3);
+          this.editorStateService.editorStep = step;
+
+          this.roomWallService.rebuildFromData(data);
+
+          this.applyCompletionFromStep(step);
+          this.cdr.detectChanges();
+
+          setTimeout(() => {
+            if (this.stepperRef) {
+              this.stepperRef.selectedIndex = step - 1;
+              this.cdr.detectChanges();
+            }
+          }, 0);
+
+          this.hydratePlacedFurnitureFromProject(data);
+        },
         error: (err) => alert('Load failed: ' + err.message)
       });
-    }
-    if (changes['newProjectTitle'] && this.newProjectTitle && this.newProjectClientId) {
-      this.isNewProject = true;
-      console.log('Creating new project with title:', this.newProjectTitle, 'and clientId:', this.newProjectClientId);
     }
   }
 
@@ -78,12 +164,6 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.threeRenderService.stopAnimation();
     if (this.threeRenderService.renderer) this.threeRenderService.renderer.dispose();
     this.editorEventsService.deleteCanvasListeners();
-    window.removeEventListener('pointermove', this.editorEventsService.onHandlePointerMove);
-    window.removeEventListener('pointerup', this.editorEventsService.onHandlePointerUp);
-    window.removeEventListener('keydown', this.editorEventsService.onKeyDown);
-    window.removeEventListener('keyup', this.editorEventsService.onKeyUp);
-    window.removeEventListener('keypress', this.editorEventsService.onKeyPress);
-    window.removeEventListener('resize', () => this.threeRenderService.resize(this.canvasRef.nativeElement));
   }
 
   public saveProjectToServer() {
@@ -92,7 +172,15 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       client: this.isNewProject ? this.newProjectClientId! : this.clientId!,
       globalVertices: this.editorStateService.globalVertices,
       roomVertexIndices: this.editorStateService.roomVertexIndices,
-      roomMetadata: this.editorStateService.roomMetadata
+      roomMetadata: this.editorStateService.roomMetadata,
+      wallAppearance: this.editorStateService.wallAppearance,
+      floorAppearance: this.editorStateService.floorAppearance,
+      furniture: this.editorStateService.placedFurnitures.map(f => ({
+        assetId: f.asset.folder,
+        position: { x: f.position.x, y: f.position.y, z: f.position.z },
+        rotation: f.rotation
+      })),
+      editorStep: this.editorStateService.editorStep
     };
     if (this.isNewProject) {
       this.projectService.saveProject(project).subscribe({
@@ -111,19 +199,200 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       });
     }
   }
-  
+
   public exitEditor() {
     this.closeEditor.emit();
   }
 
-  public get roomMetadata() {
-    return this.editorStateService.roomMetadata;
-  }
-  public get selectedRoomMesh() {
-    return this.editorStateService.selectedRoomMesh;
+  public goToStep(step: 1 | 2 | 3): void {
+    this.editorStateService.editorStep = step;
+
+    if (step === 1) this.roomWallService.hideAllWalls();
+    else this.roomWallService.regenerateAllWalls();
+
+    if (this.stepperRef) {
+      this.suppressStepperSelectionChange = true;
+      this.stepperRef.selectedIndex = step - 1;
+
+      setTimeout(() => {
+        this.suppressStepperSelectionChange = false;
+      }, 0);
+    }
+
+    this.cdr.detectChanges();
   }
 
-  public get selectedRoomIndex() {
-    return this.editorStateService.selectedRoomIndex;
+  public onNextFromStep1(): void {
+    this.step1Completed = true;
+    this.editorStateService.editorStep = 2;
+    this.roomWallService.regenerateAllWalls();
+    this.cdr.detectChanges();
+
+    queueMicrotask(() => this.stepperRef?.next());
+  }
+
+  public onBackToStep1(): void {
+    this.editorStateService.editorStep = 1;
+    this.roomWallService.hideAllWalls();
+    this.cdr.detectChanges();
+
+    queueMicrotask(() => this.stepperRef?.previous());
+  }
+
+  public onNextFromStep2(): void {
+    this.step2Completed = true;
+    this.editorStateService.editorStep = 3;
+    this.roomWallService.regenerateAllWalls();
+
+    this.cdr.detectChanges();
+    queueMicrotask(() => this.stepperRef?.next());
+  }
+
+  public onBackToStep2(): void {
+    this.editorStateService.editorStep = 2;
+    this.roomWallService.regenerateAllWalls();
+    this.cdr.detectChanges();
+
+    queueMicrotask(() => this.stepperRef?.previous());
+  }
+
+  onStepperSelectionChange(event: StepperSelectionEvent) {
+    const newStep = (event.selectedIndex + 1) as 1 | 2 | 3;
+    this.editorStateService.editorStep = newStep;
+
+    if (newStep === 1) this.roomWallService.hideAllWalls();
+    else this.roomWallService.regenerateAllWalls();
+
+    this.editorEventsService.setCanvasListeners();
+    this.cdr.detectChanges();
+  }
+
+  startPlacingFeature(type: 'window' | 'door') {
+    this.editorStateService.placingFeatureType = type;
+    this.editorEventsService.initFeaturePreview();
+  }
+
+  onWallColorPicked(ev: { hex: string; num: number }) {
+    this.wallColor = ev.hex;
+    const wall = this.editorStateService.selectedWall;
+    const side = this.editorStateService.selectedWallSide;
+    if (!wall || !side) return;
+    this.roomWallService.applyWallColorToMesh(wall, this.wallColor, side);
+  }
+
+  applyWallTexture() {
+    const wall = this.editorStateService.selectedWall;
+    const side = this.editorStateService.selectedWallSide;
+    if (!wall || !side) return;
+    this.roomWallService.applyWallTextureToMesh(wall, this.wallTexture || null, side);
+  }
+
+  onFloorColorPicked(ev: { hex: string; num: number }) {
+    this.floorColor = ev.hex;
+    const idx = this.selectedRoomIndex;
+    if (idx < 0) return;
+    const mesh = this.editorStateService.roomMeshes[idx];
+    const roomKey = idx.toString();
+    this.roomWallService.applyFloorColorToMesh(mesh, this.floorColor, roomKey);
+  }
+
+  applyFloorTexture() {
+    const idx = this.selectedRoomIndex;
+    if (idx < 0) return;
+    const mesh = this.editorStateService.roomMeshes[idx];
+    const roomKey = idx.toString();
+    this.roomWallService.applyFloorTextureToMesh(mesh, this.floorTexture || null, roomKey);
+  }
+
+  startPlacingFurniture(asset: FurnitureAsset) {
+    if (this.editorEventsService.furniturePlacementActive && this.editorEventsService.placingFurnitureModel) {
+      this.threeRenderService.scene.remove(this.editorEventsService.placingFurnitureModel);
+      this.editorEventsService.placingFurnitureModel = null;
+      this.editorEventsService.furniturePlacementActive = false;
+    }
+
+    const basePath = `assets/3d_objects/${asset.folder}/`;
+    if (asset.mtl) {
+      const mtlLoader = new MTLLoader();
+      mtlLoader.setPath(basePath);
+      mtlLoader.load(asset.mtl, (materials) => {
+        materials.preload();
+        const objLoader = new OBJLoader();
+        objLoader.setMaterials(materials);
+        objLoader.setPath(basePath);
+        objLoader.load(asset.obj, (object) => {
+          this.preparePlacementModel(object, asset);
+        });
+      });
+    } else {
+      const objLoader = new OBJLoader();
+      objLoader.setPath(basePath);
+      objLoader.load(asset.obj, (object) => {
+        this.preparePlacementModel(object, asset);
+      });
+    }
+  }
+
+  private preparePlacementModel(object: THREE.Object3D, asset: FurnitureAsset) {
+    const box = new THREE.Box3().setFromObject(object);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const targetSize = 1.2;
+    object.scale.setScalar(asset.scale || 1);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    object.position.sub(center);
+    const newBox = new THREE.Box3().setFromObject(object);
+    object.position.y -= newBox.min.y;
+
+    this.threeRenderService.scene.add(object);
+    this.editorEventsService.enableFurniturePlacement(object, asset);
+  }
+
+  private hydratePlacedFurnitureFromProject(data: ProjectData): void {
+    const list = (data as any)?.furniture as { assetId: string; position: { x: number; y: number; z: number }; rotation: number }[] | undefined;
+    if (!list || list.length === 0) {
+      this.editorStateService.placedFurnitures = [];
+      return;
+    }
+
+    this.editorStateService.placedFurnitures = [];
+
+    for (const f of list) {
+      const asset = this.furnitureAssets.find(a => a.folder === f.assetId);
+      if (!asset) continue;
+
+      const basePath = `assets/3d_objects/${asset.folder}/`;
+      const addFurniture = (object: THREE.Object3D) => {
+        object.position.set(f.position.x, f.position.y, f.position.z);
+        object.rotation.y = f.rotation ?? 0;
+        object.scale.setScalar(asset.scale || 1);
+        this.threeRenderService.scene.add(object);
+
+        this.editorStateService.placedFurnitures.push({
+          asset,
+          position: object.position.clone(),
+          rotation: object.rotation.y,
+          mesh: object
+        });
+      };
+
+      if (asset.mtl) {
+        const mtlLoader = new MTLLoader();
+        mtlLoader.setPath(basePath);
+        mtlLoader.load(asset.mtl, (materials) => {
+          materials.preload();
+          const objLoader = new OBJLoader();
+          objLoader.setMaterials(materials);
+          objLoader.setPath(basePath);
+          objLoader.load(asset.obj, addFurniture);
+        });
+      } else {
+        const objLoader = new OBJLoader();
+        objLoader.setPath(basePath);
+        objLoader.load(asset.obj, addFurniture);
+      }
+    }
   }
 }

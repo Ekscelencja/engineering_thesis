@@ -1,20 +1,213 @@
 .three-canvas {
   width: 100%;
-  height: 100%;
+  height: calc(100vh - 12.5rem) !important;
   display: block;
   background: #dedede;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-.editor-action-buttons {
+.editor-action-panel {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
+  top: 0;
+  right: -340px;
+  z-index: 1000;
+  width: 340px;
+  height: 100vh;
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  background: var(--mat-sys-surface-container-low);
+  border-left: 2px solid var(--mat-sys-primary);
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  padding: 1.5rem 0;
+  flex-direction: column;
+  transition: width 0.2s, right 0.2s;
+  box-sizing: border-box;
 
-  button {
-    height: 2rem;
+  &.expanded {
+    right: 0;
+  }
+
+  .expand-collapse-button {
+    position: absolute;
+    top: 50%;
+    left: -2.625rem;
+    transform: translateY(-50%);
+    width: 2.5rem;
+    height: 5rem;
+    background: var(--mat-sys-surface-container-low);
+    border: 2px solid var(--mat-sys-primary);
+    border-top-left-radius: 2.5rem;
+    border-bottom-left-radius: 2.5rem;
+    border-right: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+
+    .nav-icon {
+      width: 24px;
+      height: 24px;
+      fill: var(--mat-sys-primary) !important;
+      opacity: 0.9;
+      transform: rotateY(0deg);
+      transition: transform 0.2s;
+    }
+
+    &:hover .nav-icon {
+      opacity: 1;
+    }
+
+    &.expanded {
+      .nav-icon {
+        transform: rotateY(180deg);
+      }
+    }
+  }
+
+  .editor-action-buttons {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem 1.5rem 1.5rem;
+    box-sizing: border-box;
+    border-bottom: 2px solid var(--mat-sys-primary);
+
+    button {
+      height: 2rem;
+    }
+  }
+
+  .editor-action-metadata {
+    padding: 1.5rem;
+    box-sizing: border-box;
+    max-height: 330px;
+    width: 100%;
+    border-bottom: 2px solid var(--mat-sys-primary);
+    color: var(--mat-sys-primary);
+
+    .metadata-title {
+      margin: 0 0 1rem 0;
+    }
+
+    .room-metadata-summary {
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--mat-sys-outline);
+
+      &.selected {
+        background: var(--mat-sys-surface-container-high);
+      }
+
+      .room-name {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0 0 0.25rem 0;
+      }
+
+      .room-type,
+      .room-area {
+        margin: 0;
+        font-size: 0.875rem;
+        opacity: 0.8;
+      }
+    }
+  }
+
+  .expandable-table {
+    width: 100%;
+    background: transparent;
+    border-collapse: separate;
+    border-spacing: 0;
+
+    thead {
+      display: none !important;
+    }
+
+    .mat-mdc-row {
+      height: max-content;
+      background: transparent;
+
+      &.expanded-header-row {
+        background: var(--mat-sys-surface-container-high);
+      }
+    }
+
+    .mat-mdc-cell,
+    .mat-mdc-header-cell {
+      background: transparent;
+      color: var(--mat-sys-primary);
+      font-size: 1rem;
+      padding: 0.75rem 1rem;
+    }
+
+    .mat-mdc-cell {
+      display: flex;
+      align-items: center;
+      line-height: 1.5rem;
+      transition: background 0.2s;
+      border-bottom: 1px solid var(--mat-sys-primary);
+      cursor: pointer;
+
+      .mat-icon {
+        margin-right: 0.5rem;
+      }
+    }
+
+    .mat-mdc-row:hover {
+      background: var(--mat-sys-surface-container-high);
+
+      &.expanded-row {
+        background: transparent;
+      }
+    }
+
+    .expandable-content {
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+      max-height: 0;
+      opacity: 0;
+      padding: 0;
+      background: var(--mat-sys-surface-container-low);
+      transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s, padding 0.3s;
+    }
+
+    .expandable-content.expanded {
+      max-height: max-content; // or a value that fits your content
+      opacity: 1;
+      padding: 0;
+    }
+  }
+
+  .furniture-assets-gallery {
+    width: 100%;
+    max-height: calc(100vh - 410px); // total height minus paddings and other sections
+    overflow-y: auto;
+    display: flex;
+    gap: 1rem;
+    padding: 1.5rem 1.5rem 0 1.5rem;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+
+    .furniture-asset-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      width: calc(50% - 0.5rem);
+      height: max-content;
+
+      p {
+        margin: 0.5rem 0 0 0;
+        color: var(--mat-sys-primary);
+        font-size: 0.875rem;
+        text-align: center;
+      }
+    }
   }
 }

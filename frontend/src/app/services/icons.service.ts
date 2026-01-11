@@ -17,6 +17,11 @@ export class IconsService {
     'edit',
     'delete',
     'view',
+    'window',
+    'door',
+    'save',
+    'close',
+    'chevron'
     // Add more icon names as needed (without .svg extension)
   ];
 

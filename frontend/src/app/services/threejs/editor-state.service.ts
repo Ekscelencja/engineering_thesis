@@ -1,16 +1,29 @@
 import { Injectable } from '@angular/core';
+import { WallFeature, WallSide } from '../../models/room-feature.model';
+import { FurnitureAsset } from '../api/assets.service';
 import * as THREE from 'three';
 
-interface RoomMetadata {
+export interface RoomMetadata {
   name: string;
   type: string;
   area: number;
   color: number;
+  wallFeatures?: WallFeature[][]; // Array of features per wall
+}
+
+export interface PlacedFurniture {
+  asset: FurnitureAsset;
+  position: THREE.Vector3;
+  rotation: number;
+  mesh: THREE.Object3D;
 }
 
 @Injectable({ providedIn: 'root' })
 export class EditorStateService {
-  // Drawing state
+  // Step-based workflow: 1=Rooms, 2=Walls/Features, 3=Furnishing
+  public editorStep: 1 | 2 | 3 = 1;
+
+  // Drawing state aa
   public isDrawing = false;
   public meshDrawingActive = false;
   public drawingVertices: { x: number, z: number }[] = [];
@@ -25,9 +38,12 @@ export class EditorStateService {
 
   // Selection state
   public selectedRoomMesh: THREE.Mesh | null = null;
+  public selectedWall: THREE.Mesh | null = null;
+  public selectedWallSide: WallSide | null = null;
   public get selectedRoomIndex(): number {
     return this.selectedRoomMesh ? this.roomMeshes.indexOf(this.selectedRoomMesh) : -1;
   }
+  public selectedFurnitureIndex: number | null = null;
 
   // Control state
   public ctrlPressed = false;
@@ -38,4 +54,15 @@ export class EditorStateService {
   public roomMetadata: RoomMetadata[] = [];
   public globalVertices: { x: number, z: number }[] = [];
   public roomVertexIndices: number[][] = [];
+  public placingFeatureType: 'window' | 'door' | null = null;
+  public wallAppearance: Record<string, {
+    front?: { color?: string; texture?: string },
+    back?: { color?: string; texture?: string },
+    side?: { color?: string; texture?: string },
+    top?: { color?: string; texture?: string },
+    bottom?: { color?: string; texture?: string },
+    hole?: { color?: string; texture?: string }
+  }> = {};
+  public floorAppearance: Record<string, { color?: string; texture?: string }> = {};
+  public placedFurnitures: PlacedFurniture[] = [];
 }

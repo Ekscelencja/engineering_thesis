@@ -37,6 +37,9 @@ app.use('/api/projects', projectRoutes);
 const notificationRoutes = require('./routes/notificationRoutes');
 app.use('/api/notifications', notificationRoutes);
 
+const assetsRoutes = require('./routes/assetsRoutes');
+app.use('/api/assets', assetsRoutes);
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
