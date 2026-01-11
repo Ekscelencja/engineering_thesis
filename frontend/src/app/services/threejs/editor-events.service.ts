@@ -11,6 +11,8 @@ import {
   clearDrawingVertexHighlights
 } from '../../utils/geometry-utils';
 import { WallSide } from '../../models/room-feature.model';
+import { FurnitureAsset } from '../api/assets.service';
+import { isPointInPolygon, doesAABBIntersectLine } from '../../utils/geometry-utils';
 
 @Injectable({ providedIn: 'root' })
 export class EditorEventsService {
@@ -25,6 +27,10 @@ export class EditorEventsService {
     console.log('[DEBUG] selectedRoomIndex:', idx);
     return idx;
   }
+  public furniturePlacementActive = false;
+  public placingFurnitureModel: THREE.Object3D | null = null;
+  public placingFurnitureAsset: FurnitureAsset | null = null;
+  private furnitureRotation: number = 0;
 
   constructor(
     private ngZone: NgZone,
@@ -39,15 +45,38 @@ export class EditorEventsService {
 
   setCanvasListeners() {
     this.deleteCanvasListeners();
-    if (this.editorStateService.editMode) {
-      this.canvasRef.nativeElement.addEventListener('pointerdown', this.onHandlePointerDown);
-      this.canvasRef.nativeElement.addEventListener('pointermove', this.onHandlePointerMove);
-      this.canvasRef.nativeElement.addEventListener('pointerup', this.onHandlePointerUp);
-    } else if (this.editorStateService.meshDrawingActive) {
-      this.canvasRef.nativeElement.addEventListener('pointerdown', this.onPointerDown);
-    } else {
-      this.canvasRef.nativeElement.addEventListener('pointerdown', this.onRoomSelect);
+
+    const step = this.editorStateService.editorStep;
+    const canvasRef = this.canvasRef.nativeElement;
+
+    switch (step) {
+      case 1:
+        if (this.editorStateService.editMode) {
+          canvasRef.addEventListener('pointerdown', this.onHandlePointerDown);
+          canvasRef.addEventListener('pointermove', this.onHandlePointerMove);
+          canvasRef.addEventListener('pointerup', this.onHandlePointerUp);
+        } else if (this.editorStateService.meshDrawingActive) {
+          canvasRef.addEventListener('pointerdown', this.onPointerDown);
+        } else {
+          canvasRef.addEventListener('pointerdown', this.onRoomSelect);
+        }
+        break;
+      case 2:
+        canvasRef.addEventListener('pointerdown', this.onRoomSelect);
+        canvasRef.addEventListener('click', this.onCanvasClick);
+        break;
+      case 3:
+        canvasRef.addEventListener('click', this.onCanvasClick);
+        canvasRef.addEventListener('mousemove', this.onCanvasMouseMove);
+        window.addEventListener('keydown', this.onFurniturePlacementKeyDown);
+        break;
     }
+
+    window.addEventListener('pointermove', this.onHandlePointerMove);
+    window.addEventListener('pointerup', this.onHandlePointerUp);
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('keypress', this.onKeyPress);
   }
 
   deleteCanvasListeners() {
@@ -56,6 +85,15 @@ export class EditorEventsService {
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onHandlePointerDown);
     this.canvasRef.nativeElement.removeEventListener('pointermove', this.onHandlePointerMove);
     this.canvasRef.nativeElement.removeEventListener('pointerup', this.onHandlePointerUp);
+    this.canvasRef.nativeElement.removeEventListener('click', this.onCanvasClick);
+    this.canvasRef.nativeElement.removeEventListener('click', this.selectFurnitureOnClick);
+    this.canvasRef.nativeElement.removeEventListener('mousemove', this.onCanvasMouseMove);
+    window.removeEventListener('keydown', this.onFurniturePlacementKeyDown);
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    window.removeEventListener('keypress', this.onKeyPress);
+    window.removeEventListener('pointermove', this.onHandlePointerMove);
+    window.removeEventListener('pointerup', this.onHandlePointerUp);
   }
 
   onKeyDown = (event: KeyboardEvent) => {
@@ -64,7 +102,14 @@ export class EditorEventsService {
       if (this.editorStateService.ctrlPressed) this.threeRenderService.controls.enabled = true;
     }
     if (event.key === 'Delete') {
-      this.roomWallService.deleteSelectedRoom();
+      if (
+        this.editorStateService.editorStep === 3 &&
+        this.editorStateService.selectedFurnitureIndex !== null
+      ) {
+        this.roomWallService.deleteSelectedFurniture();
+      } else {
+        this.roomWallService.deleteSelectedRoom();
+      }
     }
   };
 
@@ -380,6 +425,227 @@ export class EditorEventsService {
       this.previewMesh.position.copy(this.lastPreviewPosition);
       this.previewMesh.rotation.set(0, this.lastPreviewRotationY, 0);
       this.previewMesh.visible = true;
+    }
+  };
+
+  enableFurniturePlacement(
+    placingFurnitureModel: THREE.Object3D,
+    placingFurnitureAsset: FurnitureAsset
+  ) {
+    this.furniturePlacementActive = true;
+    this.placingFurnitureModel = placingFurnitureModel;
+    this.placingFurnitureAsset = placingFurnitureAsset;
+    this.furnitureRotation = 0;
+  }
+
+  disableFurniturePlacement() {
+    this.furniturePlacementActive = false;
+    this.placingFurnitureModel = null;
+    this.placingFurnitureAsset = null;
+  }
+
+  onCanvasMouseMove = (event: MouseEvent) => {
+    if (this.furniturePlacementActive && this.placingFurnitureModel) {
+      const canvas = this.canvasRef.nativeElement;
+      const mouse = new THREE.Vector2(
+        (event.offsetX / canvas.width) * 2 - 1,
+        -(event.offsetY / canvas.height) * 2 + 1
+      );
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, this.threeRenderService.camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const intersection = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, intersection);
+      if (intersection) {
+        const point = { x: intersection.x, z: intersection.z };
+        let insideAnyRoom = false;
+        for (const indices of this.editorStateService.roomVertexIndices) {
+          const verts = indices.map(idx => this.editorStateService.globalVertices[idx]);
+          if (isPointInPolygon(point, verts)) {
+            insideAnyRoom = true;
+            break;
+          }
+        }
+        if (insideAnyRoom) {
+          // --- Wall collision check ---
+          // Compute AABB of furniture at intended position
+          const box = new THREE.Box3().setFromObject(this.placingFurnitureModel);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const min = { x: intersection.x + box.min.x, z: intersection.z + box.min.z };
+          const max = { x: intersection.x + box.max.x, z: intersection.z + box.max.z };
+          let collision = false;
+          // For each wall segment
+          for (const indices of this.editorStateService.roomVertexIndices) {
+            for (let i = 0; i < indices.length; i++) {
+              const a = this.editorStateService.globalVertices[indices[i]];
+              const b = this.editorStateService.globalVertices[indices[(i + 1) % indices.length]];
+              if (doesAABBIntersectLine({ min, max }, a, b)) {
+                collision = true;
+                break;
+              }
+            }
+            if (collision) break;
+          }
+          if (!collision) {
+            const SNAP_DISTANCE = 0.3; // Adjust as needed
+
+            let snapWall: { a: { x: number, z: number }, b: { x: number, z: number }, dist: number, closest: { x: number, z: number } } | null = null;
+
+            for (const indices of this.editorStateService.roomVertexIndices) {
+              for (let i = 0; i < indices.length; i++) {
+                const a = this.editorStateService.globalVertices[indices[i]];
+                const b = this.editorStateService.globalVertices[indices[(i + 1) % indices.length]];
+                // Closest point on wall to intended position
+                const wallVec = { x: b.x - a.x, z: b.z - a.z };
+                const wallLenSq = wallVec.x * wallVec.x + wallVec.z * wallVec.z;
+                let t = ((point.x - a.x) * wallVec.x + (point.z - a.z) * wallVec.z) / (wallLenSq || 1e-10);
+                t = Math.max(0, Math.min(1, t));
+                const closest = { x: a.x + t * wallVec.x, z: a.z + t * wallVec.z };
+                const dist = Math.hypot(point.x - closest.x, point.z - closest.z);
+                if (dist < SNAP_DISTANCE && (!snapWall || dist < snapWall.dist)) {
+                  snapWall = { a, b, dist, closest };
+                }
+              }
+            }
+
+            if (snapWall) {
+              // Snap position
+              this.placingFurnitureModel.position.x = snapWall.closest.x;
+              this.placingFurnitureModel.position.z = snapWall.closest.z;
+
+              // Snap rotation: make the back face the wall
+              const dx = snapWall.b.x - snapWall.a.x;
+              const dz = snapWall.b.z - snapWall.a.z;
+              const wallAngle = Math.atan2(dz, dx);
+              // Furniture "back" is usually -Z, so rotate to face away from wall
+              this.placingFurnitureModel.rotation.y = wallAngle + Math.PI / 2;
+            } else {
+              // No snap: use original logic
+              this.placingFurnitureModel.position.x = intersection.x;
+              this.placingFurnitureModel.position.z = intersection.z;
+            }
+          }
+          // Optionally: else, show a warning/visual cue
+        }
+      }
+    }
+  };
+
+  onCanvasClick = (event: MouseEvent) => {
+    console.log('onCanvasClick called', this.editorStateService.editorStep, this.furniturePlacementActive);
+    if (this.furniturePlacementActive && this.placingFurnitureModel && this.placingFurnitureAsset && this.editorStateService.editorStep === 3) {
+      this.editorStateService.placedFurnitures.push({
+        asset: this.placingFurnitureAsset,
+        position: this.placingFurnitureModel.position.clone(),
+        rotation: this.placingFurnitureModel.rotation.y,
+        mesh: this.placingFurnitureModel
+      });
+      this.disableFurniturePlacement();
+      return;
+    }
+    if (this.editorStateService.editorStep === 3) {
+      this.selectFurnitureOnClick(event);
+    } else if (this.editorStateService.editorStep === 2) {
+      this.handleWallClick(event);
+    }
+  };
+
+  onFurniturePlacementKeyDown = (event: KeyboardEvent) => {
+    if (!this.furniturePlacementActive || !this.placingFurnitureModel) return;
+    let changed = false;
+    if (event.key === 'ArrowLeft') {
+      this.furnitureRotation += Math.PI / 24;
+      changed = true;
+    } else if (event.key === 'ArrowRight') {
+      this.furnitureRotation -= Math.PI / 24;
+      changed = true;
+    }
+
+    const wallHeight = this.roomWallService.wallHeight ?? 3;
+    const step = 0.1; // movement step in meters
+
+    if (event.key === 'ArrowUp') {
+      let newY = this.placingFurnitureModel.position.y + step;
+      newY = Math.min(newY, wallHeight);
+      this.placingFurnitureModel.position.y = newY;
+      changed = true;
+    } else if (event.key === 'ArrowDown') {
+      let newY = this.placingFurnitureModel.position.y - step;
+      newY = Math.max(newY, 0);
+      this.placingFurnitureModel.position.y = newY;
+      changed = true;
+    }
+    if (changed) {
+      this.placingFurnitureModel.rotation.y = this.furnitureRotation;
+      event.preventDefault();
+    }
+  };
+
+  selectFurnitureOnClick = (event: MouseEvent) => {
+    if (this.furniturePlacementActive) return;
+
+    const canvas = this.canvasRef.nativeElement;
+    const mouse = new THREE.Vector2(
+      (event.offsetX / canvas.width) * 2 - 1,
+      -(event.offsetY / canvas.height) * 2 + 1
+    );
+    this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
+
+    // Build flat mesh array for raycasting
+    const meshes: THREE.Mesh[] = [];
+    for (const f of this.editorStateService.placedFurnitures) {
+      f.mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) meshes.push(child);
+      });
+    }
+    const intersects = this.raycaster.intersectObjects(meshes, false);
+    console.log('selectFurnitureOnClick called');
+    console.log('meshes:', meshes);
+    console.log('intersects:', intersects);
+
+    // Remove highlight from previous selection
+    const prevIdx = this.editorStateService.selectedFurnitureIndex;
+    if (prevIdx !== null && prevIdx >= 0) {
+      const prevPf = this.editorStateService.placedFurnitures[prevIdx];
+      prevPf.mesh.traverse(child => {
+        if (child instanceof THREE.Mesh && child.userData['highlightMaterial']) {
+          child.material = child.userData['originalMaterial'];
+          child.userData['highlightMaterial'].dispose();
+          child.userData['highlightMaterial'] = undefined;
+        }
+      });
+    }
+
+    if (intersects.length > 0) {
+      const mesh = intersects[0].object;
+      // Find which PlacedFurniture this mesh belongs to
+      const pfIndex = this.editorStateService.placedFurnitures.findIndex(f => {
+        let found = false;
+        f.mesh.traverse(child => {
+          if (child === mesh) found = true;
+        });
+        return found;
+      });
+      this.editorStateService.selectedFurnitureIndex = pfIndex;
+      console.log('[selectFurnitureOnClick] selectedFurnitureIndex:', pfIndex);
+
+      // Highlight all meshes in the group
+      if (pfIndex !== -1) {
+        const pf = this.editorStateService.placedFurnitures[pfIndex];
+        pf.mesh.traverse(child => {
+          if (child instanceof THREE.Mesh) {
+            if (!child.userData['originalMaterial']) {
+              child.userData['originalMaterial'] = child.material;
+            }
+            const highlightMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+            child.userData['highlightMaterial'] = highlightMat;
+            child.material = highlightMat;
+          }
+        });
+      }
+    } else {
+      this.editorStateService.selectedFurnitureIndex = null;
     }
   };
 }

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { WallFeature, WallSide } from '../../models/room-feature.model';
+import { FurnitureAsset } from '../api/assets.service';
 import * as THREE from 'three';
 
 export interface RoomMetadata {
@@ -8,6 +9,13 @@ export interface RoomMetadata {
   area: number;
   color: number;
   wallFeatures?: WallFeature[][]; // Array of features per wall
+}
+
+export interface PlacedFurniture {
+  asset: FurnitureAsset;
+  position: THREE.Vector3;
+  rotation: number;
+  mesh: THREE.Object3D;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -35,6 +43,7 @@ export class EditorStateService {
   public get selectedRoomIndex(): number {
     return this.selectedRoomMesh ? this.roomMeshes.indexOf(this.selectedRoomMesh) : -1;
   }
+  public selectedFurnitureIndex: number | null = null;
 
   // Control state
   public ctrlPressed = false;
@@ -55,4 +64,5 @@ export class EditorStateService {
     hole?: { color?: string; texture?: string }
   }> = {};
   public floorAppearance: Record<string, { color?: string; texture?: string }> = {};
+  public placedFurnitures: PlacedFurniture[] = [];
 }

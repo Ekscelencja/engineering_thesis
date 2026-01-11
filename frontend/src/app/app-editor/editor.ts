@@ -18,7 +18,7 @@ import { MatTableModule } from '@angular/material/table';
 import { ColorPickerComponent } from './color-picker/color-picker';
 import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
 import { FurniturePreviewComponent } from '../furniture-preview/furniture-preview';
-import { isPointInPolygon, doesAABBIntersectLine } from '../utils/geometry-utils';
+
 @Pipe({ name: 'numberToColor' })
 export class NumberToColorPipe implements PipeTransform {
   transform(value: number): string {
@@ -52,9 +52,6 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   public floorTexture: string = '';
   public wallTextureTileSizeM = 1;
   public furnitureAssets: FurnitureAsset[] = [];
-  public isPlacingFurniture: boolean = false;
-  public placingFurnitureAsset: FurnitureAsset | null = null;
-  public placingFurnitureModel: THREE.Object3D | null = null;
   public placedFurniture: { asset: FurnitureAsset, position: THREE.Vector3, rotation: number }[] = [];
 
   wallFeatureRows = [
@@ -125,13 +122,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
     this.ngZone.runOutsideAngular(() => {
       this.editorEventsService.setCanvasListeners();
-      window.addEventListener('pointermove', this.editorEventsService.onHandlePointerMove);
-      window.addEventListener('pointerup', this.editorEventsService.onHandlePointerUp);
-      window.addEventListener('keydown', this.editorEventsService.onKeyDown);
-      window.addEventListener('keyup', this.editorEventsService.onKeyUp);
-      window.addEventListener('keypress', this.editorEventsService.onKeyPress);
     });
-    this.canvasRef.nativeElement.addEventListener('mousemove', this.onCanvasMouseMove.bind(this));
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -163,8 +154,15 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
             }
           }, 0);
 
-
-          this.hydratePlacedFurnitureFromProject(data);
+          if (step === 3) {
+            this.assetsService.getFurnitureAssets().subscribe(assets => {
+              this.furnitureAssets = assets;
+              this.cdr.detectChanges();
+              this.hydratePlacedFurnitureFromProject(data);
+            });
+          } else {
+            this.hydratePlacedFurnitureFromProject(data);
+          }
         },
         error: (err) => alert('Load failed: ' + err.message)
       });
@@ -175,12 +173,6 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.threeRenderService.stopAnimation();
     if (this.threeRenderService.renderer) this.threeRenderService.renderer.dispose();
     this.editorEventsService.deleteCanvasListeners();
-    window.removeEventListener('pointermove', this.editorEventsService.onHandlePointerMove);
-    window.removeEventListener('pointerup', this.editorEventsService.onHandlePointerUp);
-    window.removeEventListener('keydown', this.editorEventsService.onKeyDown);
-    window.removeEventListener('keyup', this.editorEventsService.onKeyUp);
-    window.removeEventListener('keypress', this.editorEventsService.onKeyPress);
-    window.removeEventListener('resize', () => this.threeRenderService.resize(this.canvasRef.nativeElement));
   }
 
   public saveProjectToServer() {
@@ -193,7 +185,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       roomMetadata: this.editorStateService.roomMetadata,
       wallAppearance: this.editorStateService.wallAppearance,
       floorAppearance: this.editorStateService.floorAppearance,
-      furniture: this.placedFurniture.map(f => ({
+      furniture: this.editorStateService.placedFurnitures.map(f => ({
         assetId: f.asset.folder, // or f.asset._id if using DB ids
         position: { x: f.position.x, y: f.position.y, z: f.position.z },
         rotation: f.rotation
@@ -308,32 +300,13 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
         this.cdr.detectChanges();
       });
     }
-
+    this.editorEventsService.setCanvasListeners();
     this.cdr.detectChanges();
   }
 
   startPlacingFeature(type: 'window' | 'door') {
     this.editorStateService.placingFeatureType = type;
     this.editorEventsService.initFeaturePreview();
-  }
-
-  onCanvasClick(event: MouseEvent) {
-    if (this.isPlacingFurniture && this.placingFurnitureModel) {
-      console.log('Placed furniture:', this.placingFurnitureAsset, 'at', this.placingFurnitureModel.position);
-      // Finalize placement: optionally clone or keep reference
-      this.placedFurniture.push({
-        asset: this.placingFurnitureAsset!,
-        position: this.placingFurnitureModel.position.clone(),
-        rotation: this.placingFurnitureModel.rotation.y
-      });
-      // Clear placement state
-      this.isPlacingFurniture = false;
-      this.placingFurnitureAsset = null;
-      this.placingFurnitureModel = null;
-      // Optionally: store placed furniture in a list for saving
-      return;
-    }
-    this.editorEventsService.handleWallClick(event);
   }
 
   onWallColorPicked(ev: { hex: string; num: number }) {
@@ -378,16 +351,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   startPlacingFurniture(asset: FurnitureAsset) {
-    this.isPlacingFurniture = true;
-    this.placingFurnitureAsset = asset;
-
-    // Remove previous preview model if any
-    if (this.placingFurnitureModel) {
-      this.threeRenderService.scene.remove(this.placingFurnitureModel);
-      this.placingFurnitureModel = null;
+    if (this.editorEventsService.furniturePlacementActive && this.editorEventsService.placingFurnitureModel) {
+      this.threeRenderService.scene.remove(this.editorEventsService.placingFurnitureModel);
+      this.editorEventsService.placingFurnitureModel = null;
+      this.editorEventsService.furniturePlacementActive = false;
     }
 
-    // Load the model for placement preview
     const basePath = `assets/3d_objects/${asset.folder}/`;
     if (asset.mtl) {
       const mtlLoader = new MTLLoader();
@@ -398,26 +367,26 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
         objLoader.setMaterials(materials);
         objLoader.setPath(basePath);
         objLoader.load(asset.obj, (object) => {
-          this.preparePlacementModel(object, asset.scale);
+          this.preparePlacementModel(object, asset);
         });
       });
     } else {
       const objLoader = new OBJLoader();
       objLoader.setPath(basePath);
       objLoader.load(asset.obj, (object) => {
-        this.preparePlacementModel(object, asset.scale);
+        this.preparePlacementModel(object, asset);
       });
     }
   }
 
-  private preparePlacementModel(object: THREE.Object3D, scale: number) {
+  private preparePlacementModel(object: THREE.Object3D, asset: FurnitureAsset) {
     // Center and scale as in preview
     const box = new THREE.Box3().setFromObject(object);
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
     const targetSize = 1.2;
-    object.scale.setScalar(scale || 1);
+    object.scale.setScalar(asset.scale || 1);
     const center = new THREE.Vector3();
     box.getCenter(center);
     object.position.sub(center);
@@ -425,109 +394,52 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     object.position.y -= newBox.min.y;
 
     this.threeRenderService.scene.add(object);
-    this.placingFurnitureModel = object;
+    this.editorEventsService.enableFurniturePlacement(object, asset);
   }
 
   private hydratePlacedFurnitureFromProject(data: ProjectData): void {
     const list = (data as any)?.furniture as { assetId: string; position: { x: number; y: number; z: number }; rotation: number }[] | undefined;
     if (!list || list.length === 0) {
-      this.placedFurniture = [];
+      this.editorStateService.placedFurnitures = [];
       return;
     }
 
-    // Build placedFurniture using a minimal asset object if we don't have furnitureAssets loaded yet.
-    // We only need `folder` for saving back to DB.
-    this.placedFurniture = list.map(f => ({
-      asset: ({ folder: f.assetId } as unknown as FurnitureAsset),
-      position: new THREE.Vector3(f.position.x, f.position.y, f.position.z),
-      rotation: f.rotation ?? 0
-    }));
-  }
+    this.editorStateService.placedFurnitures = [];
 
-  onCanvasMouseMove(event: MouseEvent) {
-    if (this.isPlacingFurniture && this.placingFurnitureModel) {
-      const canvas = this.canvasRef.nativeElement;
-      const mouse = new THREE.Vector2(
-        (event.offsetX / canvas.width) * 2 - 1,
-        -(event.offsetY / canvas.height) * 2 + 1
-      );
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, this.threeRenderService.camera);
-      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-      const intersection = new THREE.Vector3();
-      raycaster.ray.intersectPlane(plane, intersection);
-      if (intersection) {
-        const point = { x: intersection.x, z: intersection.z };
-        let insideAnyRoom = false;
-        for (const indices of this.editorStateService.roomVertexIndices) {
-          const verts = indices.map(idx => this.editorStateService.globalVertices[idx]);
-          if (isPointInPolygon(point, verts)) {
-            insideAnyRoom = true;
-            break;
-          }
-        }
-        if (insideAnyRoom) {
-          // --- Wall collision check ---
-          // Compute AABB of furniture at intended position
-          const box = new THREE.Box3().setFromObject(this.placingFurnitureModel);
-          const size = new THREE.Vector3();
-          box.getSize(size);
-          const min = { x: intersection.x + box.min.x, z: intersection.z + box.min.z };
-          const max = { x: intersection.x + box.max.x, z: intersection.z + box.max.z };
-          let collision = false;
-          // For each wall segment
-          for (const indices of this.editorStateService.roomVertexIndices) {
-            for (let i = 0; i < indices.length; i++) {
-              const a = this.editorStateService.globalVertices[indices[i]];
-              const b = this.editorStateService.globalVertices[indices[(i + 1) % indices.length]];
-              if (doesAABBIntersectLine({ min, max }, a, b)) {
-                collision = true;
-                break;
-              }
-            }
-            if (collision) break;
-          }
-          if (!collision) {
-            const SNAP_DISTANCE = 0.3; // Adjust as needed
+    for (const f of list) {
+      const asset = this.furnitureAssets.find(a => a.folder === f.assetId);
+      if (!asset) continue;
 
-            let snapWall: { a: { x: number, z: number }, b: { x: number, z: number }, dist: number, closest: { x: number, z: number } } | null = null;
+      const basePath = `assets/3d_objects/${asset.folder}/`;
+      const addFurniture = (object: THREE.Object3D) => {
+        object.position.set(f.position.x, f.position.y, f.position.z);
+        object.rotation.y = f.rotation ?? 0;
+        object.scale.setScalar(asset.scale || 1);
+        this.threeRenderService.scene.add(object);
 
-            for (const indices of this.editorStateService.roomVertexIndices) {
-              for (let i = 0; i < indices.length; i++) {
-                const a = this.editorStateService.globalVertices[indices[i]];
-                const b = this.editorStateService.globalVertices[indices[(i + 1) % indices.length]];
-                // Closest point on wall to intended position
-                const wallVec = { x: b.x - a.x, z: b.z - a.z };
-                const wallLenSq = wallVec.x * wallVec.x + wallVec.z * wallVec.z;
-                let t = ((point.x - a.x) * wallVec.x + (point.z - a.z) * wallVec.z) / (wallLenSq || 1e-10);
-                t = Math.max(0, Math.min(1, t));
-                const closest = { x: a.x + t * wallVec.x, z: a.z + t * wallVec.z };
-                const dist = Math.hypot(point.x - closest.x, point.z - closest.z);
-                if (dist < SNAP_DISTANCE && (!snapWall || dist < snapWall.dist)) {
-                  snapWall = { a, b, dist, closest };
-                }
-              }
-            }
+        // Only push after model is loaded!
+        this.editorStateService.placedFurnitures.push({
+          asset,
+          position: object.position.clone(),
+          rotation: object.rotation.y,
+          mesh: object
+        });
+      };
 
-            if (snapWall) {
-              // Snap position
-              this.placingFurnitureModel.position.x = snapWall.closest.x;
-              this.placingFurnitureModel.position.z = snapWall.closest.z;
-
-              // Snap rotation: make the back face the wall
-              const dx = snapWall.b.x - snapWall.a.x;
-              const dz = snapWall.b.z - snapWall.a.z;
-              const wallAngle = Math.atan2(dz, dx);
-              // Furniture "back" is usually -Z, so rotate to face away from wall
-              this.placingFurnitureModel.rotation.y = wallAngle + Math.PI / 2;
-            } else {
-              // No snap: use original logic
-              this.placingFurnitureModel.position.x = intersection.x;
-              this.placingFurnitureModel.position.z = intersection.z;
-            }
-          }
-          // Optionally: else, show a warning/visual cue
-        }
+      if (asset.mtl) {
+        const mtlLoader = new MTLLoader();
+        mtlLoader.setPath(basePath);
+        mtlLoader.load(asset.mtl, (materials) => {
+          materials.preload();
+          const objLoader = new OBJLoader();
+          objLoader.setMaterials(materials);
+          objLoader.setPath(basePath);
+          objLoader.load(asset.obj, addFurniture);
+        });
+      } else {
+        const objLoader = new OBJLoader();
+        objLoader.setPath(basePath);
+        objLoader.load(asset.obj, addFurniture);
       }
     }
   }

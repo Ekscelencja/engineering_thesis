@@ -394,10 +394,6 @@ export class RoomWallService {
       console.log('Regenerating walls after import');
       this.regenerateAllWalls();
     }
-    if(this.editorState.editorStep > 2) {
-      console.log('Restoring furniture after import');
-      this.furnitureService.loadFurnitureIntoScene(data.furniture, this.threeRender.scene);
-    }
   }
 
   // Handles completion of a polygon (room)
@@ -616,6 +612,50 @@ export class RoomWallService {
       ...this.editorState.floorAppearance[roomKey],
       texture: textureId || ''
     };
+  }
+
+  deleteSelectedFurniture() {
+    const idx = this.editorState.selectedFurnitureIndex;
+    if (idx == null || idx < 0) return;
+    const furniture = this.editorState.placedFurnitures[idx];
+
+    // Remove mesh and all its children from the scene, no matter where they are parented
+    furniture.mesh.traverse(child => {
+      if (child.parent && child.parent.type === 'Scene') {
+        child.parent.remove(child);
+      }
+    });
+    // Also remove the root mesh from its parent (if not already removed)
+    if (furniture.mesh.parent) {
+      furniture.mesh.parent.remove(furniture.mesh);
+    }
+
+    // Dispose all geometries/materials in the group
+    furniture.mesh.traverse(child => {
+      if (child instanceof THREE.Mesh) {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach(mat => mat.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      }
+    });
+
+    // Remove from array and clear selection
+    this.editorState.placedFurnitures.splice(idx, 1);
+    this.editorState.selectedFurnitureIndex = null;
+
+    // Debug: print scene children
+    console.log('Scene children after deletion:', this.threeRender.scene.children);
+
+    // Force a render update
+    this.threeRender.renderer?.render(
+      this.threeRender.scene,
+      this.threeRender.camera
+    );
   }
 }
 
