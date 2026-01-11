@@ -10,11 +10,15 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatStepperModule, MatStepper } from '@angular/material/stepper';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTableModule } from '@angular/material/table';
+import { MatDialog } from '@angular/material/dialog';
+import { FeedbackDialogComponent, FeedbackDialogData } from '../feedback/feedback-dialog/feedback-dialog';
+import { FeedbackViewDialogComponent } from '../feedback/feedback-view-dialog/feedback-view-dialog';
+import { NotificationService, Feedback } from '../services/api/notification.service';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { StepperSelectionEvent } from '@angular/cdk/stepper';
-import { MatTableModule } from '@angular/material/table';
 import { ColorPickerComponent } from './color-picker/color-picker';
 import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
 import { FurniturePreviewComponent } from '../furniture-preview/furniture-preview';
@@ -75,6 +79,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   @Input() projectData: Partial<ProjectData> | null = null;
   @Output() closeEditor = new EventEmitter<void>();
 
+  // Add these new inputs
+  @Input() feedbackMode: boolean = false;
+  @Input() viewOnly: boolean = false;
+
+  // Add feedback-related properties
+  private feedbackMarkers: THREE.Mesh[] = [];
+  private feedbackData: Feedback[] = [];
+
   private suppressStepperSelectionChange = false;
 
   public get roomMetadata() {
@@ -108,13 +120,26 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     private roomWallService: RoomWallService,
     private projectService: ProjectService,
     public editorEventsService: EditorEventsService,
-    private assetsService: AssetsService
+    private assetsService: AssetsService,
+    private dialog: MatDialog,  // Add this
+    private notificationService: NotificationService  // Add this
   ) { }
 
   ngAfterViewInit() {
     this.threeRenderService.init(this.canvasRef.nativeElement);
     this.threeRenderService.animate();
     this.editorEventsService.setCanvasRef(this.canvasRef);
+
+    // Pass feedback mode and view-only state to services
+    this.editorStateService.feedbackMode = this.feedbackMode;
+    this.editorEventsService.viewOnly = this.viewOnly;
+    this.editorEventsService.feedbackMode = this.feedbackMode;
+
+    // Set up feedback click handler if in feedback mode
+    if (this.feedbackMode) {
+      this.editorEventsService.onFeedbackElementSelected = this.onElementSelectedForFeedback.bind(this);
+      this.editorEventsService.onFeedbackMarkerClicked = this.onFeedbackMarkerClicked.bind(this);
+    }
 
     window.addEventListener('resize', () => this.threeRenderService.resize(this.canvasRef.nativeElement));
 
@@ -155,9 +180,26 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
           } else {
             this.hydratePlacedFurnitureFromProject(data);
           }
+
+          // Load feedback markers after project loads
+          this.loadFeedbackMarkers();
         },
         error: (err) => alert('Load failed: ' + err.message)
       });
+    }
+
+    // Update feedback mode state when input changes
+    if (changes['feedbackMode']) {
+      this.editorStateService.feedbackMode = this.feedbackMode;
+      if (this.editorEventsService) {
+        this.editorEventsService.feedbackMode = this.feedbackMode;
+      }
+    }
+
+    if (changes['viewOnly']) {
+      if (this.editorEventsService) {
+        this.editorEventsService.viewOnly = this.viewOnly;
+      }
     }
   }
 
@@ -415,5 +457,127 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
         objLoader.load(asset.obj, addFurniture);
       }
     }
+  }
+
+  // ========== FEEDBACK METHODS ==========
+
+  loadFeedbackMarkers(): void {
+    if (!this.projectId) return;
+
+    this.notificationService.getFeedbackByProject(this.projectId).subscribe({
+      next: (feedbacks) => {
+        this.feedbackData = feedbacks;
+        this.clearFeedbackMarkers();
+
+        feedbacks.filter(f => f.status === 'pending').forEach(feedback => {
+          this.createFeedbackMarker(feedback);
+        });
+      },
+      error: (err) => console.error('Failed to load feedback:', err)
+    });
+  }
+
+  private createFeedbackMarker(feedback: Feedback): void {
+    const geometry = new THREE.SphereGeometry(0.15, 16, 16);
+    const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const marker = new THREE.Mesh(geometry, material);
+
+    marker.position.set(
+      feedback.position.x,
+      feedback.position.y + 0.5,
+      feedback.position.z
+    );
+    marker.userData['feedbackId'] = feedback._id;
+    marker.userData['isFeedbackMarker'] = true;
+
+    this.threeRenderService.scene.add(marker);
+    this.feedbackMarkers.push(marker);
+    this.editorStateService.feedbackMarkers.push(marker);
+  }
+
+  private clearFeedbackMarkers(): void {
+    this.feedbackMarkers.forEach(marker => {
+      this.threeRenderService.scene.remove(marker);
+      marker.geometry.dispose();
+      (marker.material as THREE.Material).dispose();
+    });
+    this.feedbackMarkers = [];
+    this.editorStateService.feedbackMarkers = [];
+  }
+
+  onElementSelectedForFeedback(
+    elementType: 'room' | 'wall' | 'furniture',
+    elementId: string,
+    position: THREE.Vector3
+  ): void {
+    if (!this.feedbackMode || !this.projectId) return;
+
+    const dialogData: FeedbackDialogData = {
+      elementType,
+      elementId,
+      position: { x: position.x, y: position.y, z: position.z }
+    };
+
+    const dialogRef = this.dialog.open(FeedbackDialogComponent, {
+      width: '400px',
+      data: dialogData
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.message) {
+        this.notificationService.createFeedback({
+          projectId: this.projectId!,
+          elementType,
+          elementId,
+          position: { x: position.x, y: position.y, z: position.z },
+          message: result.message
+        }).subscribe({
+          next: () => {
+            this.loadFeedbackMarkers();
+          },
+          error: (err) => console.error('Failed to create feedback:', err)
+        });
+      }
+    });
+  }
+
+  onFeedbackMarkerClicked(feedbackId: string): void {
+    const feedback = this.feedbackData.find(f => f._id === feedbackId);
+    if (!feedback) return;
+
+    const canResolve = this.userType === 'architect';
+
+    const dialogRef = this.dialog.open(FeedbackViewDialogComponent, {
+      width: '450px',
+      data: { feedback, canResolve }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.resolve) {
+        this.notificationService.resolveFeedback(feedbackId).subscribe({
+          next: () => {
+            this.loadFeedbackMarkers();
+          },
+          error: (err) => console.error('Failed to resolve feedback:', err)
+        });
+      }
+    });
+  }
+
+  // Block certain actions if view-only or feedback mode
+  get canEdit(): boolean {
+    return !this.viewOnly && !this.feedbackMode;
+  }
+
+  get canPlaceFurniture(): boolean {
+    return this.canEdit && this.editorStep === 3;
+  }
+
+  get canModifyWalls(): boolean {
+    return this.canEdit && this.editorStep === 2;
+  }
+
+  get canDrawRooms(): boolean {
+    return this.canEdit && this.editorStep === 1;
   }
 }

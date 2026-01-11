@@ -1,0 +1,29 @@
+<h2 mat-dialog-title>
+    <mat-icon [class]="data.feedback.status">feedback</mat-icon>
+    Feedback
+</h2>
+<mat-dialog-content>
+    <div class="feedback-meta">
+        <p><strong>From:</strong> {{ getAuthorName() }}</p>
+        <p><strong>Element:</strong> {{ data.feedback.elementType | titlecase }}</p>
+        <p><strong>Status:</strong>
+            <span [class]="'status-badge ' + data.feedback.status">
+                {{ data.feedback.status | titlecase }}
+            </span>
+        </p>
+        <p><strong>Created:</strong> {{ data.feedback.createdAt | date:'medium' }}</p>
+    </div>
+    <div class="feedback-message">
+        <p>{{ data.feedback.message }}</p>
+    </div>
+    <div *ngIf="data.feedback.status === 'resolved'" class="resolved-info">
+        <p><strong>Resolved at:</strong> {{ data.feedback.resolvedAt | date:'medium' }}</p>
+    </div>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+    <button mat-button (click)="onClose()">Close</button>
+    <button *ngIf="data.canResolve && data.feedback.status === 'pending'" mat-raised-button color="primary"
+        (click)="onResolve()">
+        Mark as Resolved
+    </button>
+</mat-dialog-actions>

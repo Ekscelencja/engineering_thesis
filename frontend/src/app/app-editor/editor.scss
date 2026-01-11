@@ -210,4 +210,39 @@
       }
     }
   }
+
+  .feedback-mode-banner,
+  .view-only-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #fff3cd;
+    color: #856404;
+    border-bottom: 1px solid #ffeeba;
+    font-weight: 500;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+  }
+
+  .view-only-banner {
+    background: #cce5ff;
+    color: #004085;
+    border-bottom-color: #b8daff;
+  }
+
+  .furniture-panel.view-only {
+    opacity: 0.7;
+    pointer-events: none;
+
+    h4::after {
+      content: ' (View Only)';
+      font-size: 12px;
+      color: #666;
+    }
+  }
 }

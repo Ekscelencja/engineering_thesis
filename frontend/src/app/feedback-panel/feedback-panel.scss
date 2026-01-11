@@ -1,3 +1,42 @@
 .feedback-panel {
-  padding: 2rem;
+  padding: 24px;
+
+  h2 {
+    margin-bottom: 24px;
+  }
+
+  .loading,
+  .empty {
+    text-align: center;
+    padding: 48px;
+    color: #666;
+  }
+
+  .feedback-table {
+    width: 100%;
+  }
+
+  .message-cell {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .status-badge {
+    padding: 4px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+
+    &.pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    &.resolved {
+      background: #d4edda;
+      color: #155724;
+    }
+  }
 }

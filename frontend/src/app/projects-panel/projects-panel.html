@@ -64,9 +64,17 @@
     No projects found.
   </div>
 
-  <app-editor #editorRef *ngIf="showEditorOnly()" [projectId]="selectedProjectId" [newProjectTitle]="newProjectTitle"
-    [newProjectClientId]="newProjectClientId" [userType]="userType" (closeEditor)="showEditorOnly.set(false)">
-  </app-editor>
+  <app-editor
+    *ngIf="showEditorOnly()"
+    #editorRef
+    [projectId]="selectedProjectId"
+    [newProjectTitle]="newProjectTitle"
+    [newProjectClientId]="newProjectClientId"
+    [userType]="userType"
+    [feedbackMode]="feedbackMode"
+    [viewOnly]="userType === 'client' && !feedbackMode"
+    (closeEditor)="showEditorOnly.set(false); feedbackMode = false; selectedProjectId = null; fetchProjects()"
+  ></app-editor>
 
   <!-- Confirmation Dialog Template -->
   <ng-template #confirmDialog>

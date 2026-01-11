@@ -157,3 +157,61 @@
 		</div>
 	</ng-container>
 </div>
+
+<!-- Add feedback mode banner at the top of the editor -->
+<div class="feedback-mode-banner" *ngIf="feedbackMode">
+  <mat-icon>feedback</mat-icon>
+  <span>Feedback Mode: Click on any element (room, wall, or furniture) to leave feedback</span>
+</div>
+
+<div class="view-only-banner" *ngIf="viewOnly && !feedbackMode">
+  <mat-icon>visibility</mat-icon>
+  <span>View Only Mode: You can view but not edit this project</span>
+</div>
+
+<!-- Wrap action buttons with canEdit check -->
+<div class="action-panel" *ngIf="actionPanelExpanded && canEdit">
+  <!-- ...existing action panel content... -->
+</div>
+
+<!-- Hide stepper navigation buttons if view-only -->
+<div class="step-actions" *ngIf="canEdit">
+  <!-- Step 1 actions -->
+  <ng-container *ngIf="editorStep === 1">
+    <button mat-raised-button color="primary" (click)="onNextFromStep1()">
+      Next: Wall Features
+    </button>
+  </ng-container>
+
+  <!-- Step 2 actions -->
+  <ng-container *ngIf="editorStep === 2">
+    <button mat-button (click)="onBackToStep1()">Back</button>
+    <button mat-raised-button color="primary" (click)="onNextFromStep2()">
+      Next: Furnishing
+    </button>
+  </ng-container>
+
+  <!-- Step 3 actions -->
+  <ng-container *ngIf="editorStep === 3">
+    <button mat-button (click)="onBackToStep2()">Back</button>
+  </ng-container>
+</div>
+
+<!-- Hide furniture placement panel if not canPlaceFurniture -->
+<div class="furniture-panel" *ngIf="editorStep === 3 && canPlaceFurniture">
+  <!-- ...existing furniture panel content... -->
+</div>
+
+<!-- Show furniture gallery as view-only if in feedback/view mode -->
+<div class="furniture-panel view-only" *ngIf="editorStep === 3 && !canPlaceFurniture">
+  <h4>Furniture (View Only)</h4>
+  <!-- Display furniture list without click actions -->
+</div>
+
+<!-- Hide save button if view-only -->
+<button mat-fab color="primary" class="save-btn" 
+        *ngIf="canEdit" 
+        (click)="saveProjectToServer()" 
+        matTooltip="Save Project">
+  <mat-icon>save</mat-icon>
+</button>

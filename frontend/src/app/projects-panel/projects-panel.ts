@@ -41,6 +41,7 @@ export class ProjectsPanelComponent implements OnInit {
   newProjectTitle: string | null = null;
   newProjectClientId: string | null = null;
   userType: string | null = null;
+  feedbackMode: boolean = false;
 
   @ViewChild('editorRef') editorRef?: EditorComponent;
   @ViewChild('confirmDialog') confirmDialogTpl!: TemplateRef<any>;
@@ -170,13 +171,27 @@ export class ProjectsPanelComponent implements OnInit {
     });
   }
 
+  // Update viewProject method
   viewProject(project: ProjectData) {
-    this.viewProject(project);
-    
+    this.selectedProjectId = project._id || null;
+    this.feedbackMode = false;
+    this.showEditorOnly.set(true);
   }
 
+  // Update giveFeedback method
   giveFeedback(project: ProjectData) {
-    // Client: Logic to give feedback on a project
-    console.log('Feedback for project', project);
+    this.selectedProjectId = project._id || null;
+    this.feedbackMode = true;
+    this.showEditorOnly.set(true);
+  }
+
+  // Add method to close editor and reset state
+  closeEditor() {
+    this.showEditorOnly.set(false);
+    this.feedbackMode = false;
+    this.selectedProjectId = null;
+    this.newProjectTitle = null;
+    this.newProjectClientId = null;
+    this.fetchProjects();
   }
 }

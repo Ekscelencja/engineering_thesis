@@ -32,6 +32,15 @@ export class EditorEventsService {
   public placingFurnitureAsset: FurnitureAsset | null = null;
   private furnitureRotation: number = 0;
 
+  public viewOnly: boolean = false;
+  public feedbackMode: boolean = false;
+  public onFeedbackElementSelected?: (
+    elementType: 'room' | 'wall' | 'furniture',
+    elementId: string,
+    position: THREE.Vector3
+  ) => void;
+  public onFeedbackMarkerClicked?: (feedbackId: string) => void;
+
   constructor(
     private ngZone: NgZone,
     private editorStateService: EditorStateService,
@@ -534,6 +543,29 @@ export class EditorEventsService {
 
   onCanvasClick = (event: MouseEvent) => {
     console.log('onCanvasClick called', this.editorStateService.editorStep, this.furniturePlacementActive);
+
+    // Handle feedback marker clicks first (for both feedback mode and normal mode)
+    const feedbackMarker = this.checkFeedbackMarkerClick(event);
+    if (feedbackMarker) {
+      const feedbackId = feedbackMarker.userData['feedbackId'];
+      if (this.onFeedbackMarkerClicked && feedbackId) {
+        this.onFeedbackMarkerClicked(feedbackId);
+      }
+      return;
+    }
+
+    // Handle feedback element selection (client selecting an element to leave feedback)
+    if (this.feedbackMode) {
+      this.handleFeedbackSelection(event);
+      return;
+    }
+
+    // Block editing actions if view-only
+    if (this.viewOnly) {
+      return;
+    }
+
+    // Existing furniture placement logic
     if (this.furniturePlacementActive && this.placingFurnitureModel && this.placingFurnitureAsset && this.editorStateService.editorStep === 3) {
       this.editorStateService.placedFurnitures.push({
         asset: this.placingFurnitureAsset,
@@ -544,6 +576,8 @@ export class EditorEventsService {
       this.disableFurniturePlacement();
       return;
     }
+
+    // Existing step-based logic
     if (this.editorStateService.editorStep === 3) {
       this.selectFurnitureOnClick(event);
     } else if (this.editorStateService.editorStep === 2) {
@@ -648,4 +682,99 @@ export class EditorEventsService {
       this.editorStateService.selectedFurnitureIndex = null;
     }
   };
+
+  private checkFeedbackMarkerClick(event: MouseEvent): THREE.Mesh | null {
+    if (!this.canvasRef) return null;
+
+    const canvas = this.canvasRef.nativeElement;
+    const mouse = new THREE.Vector2(
+      (event.offsetX / canvas.width) * 2 - 1,
+      -(event.offsetY / canvas.height) * 2 + 1
+    );
+
+    this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
+
+    const feedbackMarkers = this.editorStateService.feedbackMarkers;
+    if (!feedbackMarkers || feedbackMarkers.length === 0) return null;
+
+    const intersects = this.raycaster.intersectObjects(feedbackMarkers, false);
+
+    if (intersects.length > 0) {
+      return intersects[0].object as THREE.Mesh;
+    }
+    return null;
+  }
+
+  private handleFeedbackSelection(event: MouseEvent): void {
+    if (!this.canvasRef || !this.onFeedbackElementSelected) return;
+
+    const canvas = this.canvasRef.nativeElement;
+    const mouse = new THREE.Vector2(
+      (event.offsetX / canvas.width) * 2 - 1,
+      -(event.offsetY / canvas.height) * 2 + 1
+    );
+
+    this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
+
+    // Check furniture first
+    const furnitureMeshes: THREE.Mesh[] = [];
+    for (const f of this.editorStateService.placedFurnitures) {
+      f.mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) furnitureMeshes.push(child);
+      });
+    }
+
+    let intersects = this.raycaster.intersectObjects(furnitureMeshes, false);
+    if (intersects.length > 0) {
+      const hitMesh = intersects[0].object;
+      const point = intersects[0].point;
+
+      // Find which PlacedFurniture this mesh belongs to
+      const furnitureIndex = this.editorStateService.placedFurnitures.findIndex(f => {
+        let found = false;
+        f.mesh.traverse(child => {
+          if (child === hitMesh) found = true;
+        });
+        return found;
+      });
+
+      if (furnitureIndex >= 0) {
+        this.onFeedbackElementSelected(
+          'furniture',
+          furnitureIndex.toString(),
+          point.clone()
+        );
+        return;
+      }
+    }
+
+    // Check walls
+    const wallMeshes = this.editorStateService.allWallMeshes.flat();
+    intersects = this.raycaster.intersectObjects(wallMeshes, false);
+    if (intersects.length > 0) {
+      const wall = intersects[0].object as THREE.Mesh;
+      const point = intersects[0].point;
+      this.onFeedbackElementSelected(
+        'wall',
+        wall.uuid,
+        point.clone()
+      );
+      return;
+    }
+
+    // Check rooms (floors)
+    const roomMeshes = this.editorStateService.roomMeshes;
+    intersects = this.raycaster.intersectObjects(roomMeshes, false);
+    if (intersects.length > 0) {
+      const room = intersects[0].object as THREE.Mesh;
+      const point = intersects[0].point;
+      const roomIndex = roomMeshes.indexOf(room);
+      this.onFeedbackElementSelected(
+        'room',
+        roomIndex.toString(),
+        point.clone()
+      );
+      return;
+    }
+  }
 }
