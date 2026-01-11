@@ -104,6 +104,10 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     return this.editorStateService.editorStep;
   }
 
+  public get canEdit(): boolean {
+    return !this.viewOnly && !this.feedbackMode;
+  }
+
   public step1Completed = false;
   public step2Completed = false;
 
@@ -135,11 +139,13 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.editorEventsService.viewOnly = this.viewOnly;
     this.editorEventsService.feedbackMode = this.feedbackMode;
 
-    // Set up feedback click handler if in feedback mode
+    // Set up feedback element selection handler (only for feedback mode - client leaving feedback)
     if (this.feedbackMode) {
       this.editorEventsService.onFeedbackElementSelected = this.onElementSelectedForFeedback.bind(this);
-      this.editorEventsService.onFeedbackMarkerClicked = this.onFeedbackMarkerClicked.bind(this);
     }
+
+    // ALWAYS set up feedback marker click handler (for both architect and client to view feedback)
+    this.editorEventsService.onFeedbackMarkerClicked = this.onFeedbackMarkerClicked.bind(this);
 
     window.addEventListener('resize', () => this.threeRenderService.resize(this.canvasRef.nativeElement));
 
@@ -562,22 +568,5 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
         });
       }
     });
-  }
-
-  // Block certain actions if view-only or feedback mode
-  get canEdit(): boolean {
-    return !this.viewOnly && !this.feedbackMode;
-  }
-
-  get canPlaceFurniture(): boolean {
-    return this.canEdit && this.editorStep === 3;
-  }
-
-  get canModifyWalls(): boolean {
-    return this.canEdit && this.editorStep === 2;
-  }
-
-  get canDrawRooms(): boolean {
-    return this.canEdit && this.editorStep === 1;
   }
 }

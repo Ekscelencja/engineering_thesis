@@ -542,13 +542,14 @@ export class EditorEventsService {
   };
 
   onCanvasClick = (event: MouseEvent) => {
-    console.log('onCanvasClick called', this.editorStateService.editorStep, this.furniturePlacementActive);
 
     // Handle feedback marker clicks first (for both feedback mode and normal mode)
     const feedbackMarker = this.checkFeedbackMarkerClick(event);
     if (feedbackMarker) {
       const feedbackId = feedbackMarker.userData['feedbackId'];
+      console.log('Feedback marker clicked:', feedbackId); // Add debug log
       if (this.onFeedbackMarkerClicked && feedbackId) {
+        console.log('Invoking onFeedbackMarkerClicked callback with ID:', feedbackId); // Add debug log
         this.onFeedbackMarkerClicked(feedbackId);
       }
       return;

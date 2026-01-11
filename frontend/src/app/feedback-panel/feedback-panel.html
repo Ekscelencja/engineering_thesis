@@ -1,6 +1,4 @@
 <div class="feedback-panel">
-  <h2>Feedback</h2>
-
   <div *ngIf="loading" class="loading">Loading feedback...</div>
 
   <div *ngIf="!loading && feedbacks.length === 0" class="empty">
@@ -41,11 +39,11 @@
       <th mat-header-cell *matHeaderCellDef>Actions</th>
       <td mat-cell *matCellDef="let feedback">
         <button mat-icon-button *ngIf="isArchitect() && feedback.status === 'pending'"
-          (click)="resolveFeedback(feedback)" matTooltip="Mark as Resolved">
+          (click)="resolveFeedback(feedback)" matTooltip="Mark as Resolved" class="action-button">
           <mat-icon>check_circle</mat-icon>
         </button>
-        <button mat-icon-button color="warn" (click)="deleteFeedback(feedback)" matTooltip="Delete">
-          <mat-icon>delete</mat-icon>
+        <button mat-icon-button color="warn" (click)="deleteFeedback(feedback)"matTooltip="Delete" class="action-button">
+          <mat-icon svgIcon="delete" aria-hidden="true" class="action-icon"></mat-icon>
         </button>
       </td>
     </ng-container>

@@ -1,5 +1,12 @@
 .feedback-panel {
-  padding: 24px;
+  padding: 2rem 1rem;
+  padding-top: 4rem;
+  height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 
   h2 {
     margin-bottom: 24px;
@@ -14,6 +21,19 @@
 
   .feedback-table {
     width: 100%;
+    background: var(--mat-sys-background);
+    color: #fff;
+    border-radius: 8px;
+    border: 2px solid var(--mat-sys-outline);
+  }
+
+  .mat-header-cell,
+  .mat-cell {
+    padding: 0.75rem 1rem;
+  }
+
+  .mat-header-row {
+    background: #23202a;
   }
 
   .message-cell {
@@ -37,6 +57,14 @@
     &.resolved {
       background: #d4edda;
       color: #155724;
+    }
+  }
+
+  .action-button {
+    &:hover {
+      .mat-icon {
+        fill: var(--mat-sys-primary);
+      }
     }
   }
 }
