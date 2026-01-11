@@ -148,10 +148,6 @@
 
 	<!-- Step 3: Furnishing -->
 	<ng-container *ngIf="editorStep === 3">
-		<!-- <button mat-flat-button color="warn" (click)="placeSofa()" [disabled]="isPlacingSofa">Place Sofa</button>
-		<button mat-flat-button color="basic" (click)="removeSofa()" [disabled]="!sofaModel">Remove Sofa</button>
-		<span *ngIf="isPlacingSofa" style="margin-left:12px;color:#d32f2f;font-weight:bold;">Loading sofa
-			model...</span> -->
 		<div class="furniture-assets-gallery">
 			<div *ngFor="let asset of furnitureAssets" class="furniture-asset-item"
 				(click)="startPlacingFurniture(asset)">
@@ -161,26 +157,3 @@
 		</div>
 	</ng-container>
 </div>
-
-<!-- Room Metadata Sidebar
-<div class="room-metadata-sidebar"
-	style="position:fixed;top:0;right:0;z-index:9999;background:#fff;color:#000;padding:8px;border:1px solid #ccc;max-width:400px;"
-	*ngIf="selectedRoomMesh && roomMetadata[selectedRoomIndex]">
-	<h3>Room Metadata</h3>
-	<form (ngSubmit)="$event.preventDefault()">
-		<label>
-			Name:
-			<input type="text" [(ngModel)]="roomMetadata[selectedRoomIndex].name" name="roomName" />
-		</label>
-		<br />
-		<label>
-			Type:
-			<input type="text" [(ngModel)]="roomMetadata[selectedRoomIndex].type" name="roomType" />
-		</label>
-		<br />
-		<label>
-			Area:
-			<input type="text" [value]="roomMetadata[selectedRoomIndex].area | number:'1.2-2'" readonly /> m²
-		</label>
-	</form>
-</div> -->
