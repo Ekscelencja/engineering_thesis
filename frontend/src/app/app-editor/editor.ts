@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, NgZone, ChangeDetectorRef, Input, SimpleChanges, Output, EventEmitter, Pipe, PipeTransform, OnInit } from '@angular/core';
+import { Component, ElementRef, OnDestroy, AfterViewInit, ViewChild, NgZone, ChangeDetectorRef, Input, SimpleChanges, Output, EventEmitter, Pipe, PipeTransform } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EditorStateService } from '../services/threejs/editor-state.service';
@@ -45,7 +45,7 @@ export class NumberToColorPipe implements PipeTransform {
     FurniturePreviewComponent
   ]
 })
-export class EditorComponent implements OnInit, AfterViewInit, OnDestroy {
+export class EditorComponent implements AfterViewInit, OnDestroy {
   public wallColor: string = '';
   public wallTexture: string = '';
   public floorColor: string = '';
@@ -110,13 +110,6 @@ export class EditorComponent implements OnInit, AfterViewInit, OnDestroy {
     public editorEventsService: EditorEventsService,
     private assetsService: AssetsService
   ) { }
-  
-  ngOnInit() {
-    this.assetsService.getFurnitureAssets().subscribe(assets => {
-      this.furnitureAssets = assets;
-      this.cdr.detectChanges();
-    });
-  }
 
   ngAfterViewInit() {
     this.threeRenderService.init(this.canvasRef.nativeElement);
@@ -153,7 +146,15 @@ export class EditorComponent implements OnInit, AfterViewInit, OnDestroy {
             }
           }, 0);
 
-          this.hydratePlacedFurnitureFromProject(data);
+          if (step === 3) {
+            this.assetsService.getFurnitureAssets().subscribe(assets => {
+              this.furnitureAssets = assets;
+              this.cdr.detectChanges();
+              this.hydratePlacedFurnitureFromProject(data);
+            });
+          } else {
+            this.hydratePlacedFurnitureFromProject(data);
+          }
         },
         error: (err) => alert('Load failed: ' + err.message)
       });
@@ -210,6 +211,13 @@ export class EditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (step === 1) this.roomWallService.hideAllWalls();
     else this.roomWallService.regenerateAllWalls();
 
+    if (step === 3 && this.furnitureAssets.length === 0) {
+      this.assetsService.getFurnitureAssets().subscribe(assets => {
+        this.furnitureAssets = assets;
+        this.cdr.detectChanges();
+      });
+    }
+
     if (this.stepperRef) {
       this.suppressStepperSelectionChange = true;
       this.stepperRef.selectedIndex = step - 1;
@@ -244,6 +252,13 @@ export class EditorComponent implements OnInit, AfterViewInit, OnDestroy {
     this.editorStateService.editorStep = 3;
     this.roomWallService.regenerateAllWalls();
 
+    if (this.furnitureAssets.length === 0) {
+      this.assetsService.getFurnitureAssets().subscribe(assets => {
+        this.furnitureAssets = assets;
+        this.cdr.detectChanges();
+      });
+    }
+
     this.cdr.detectChanges();
     queueMicrotask(() => this.stepperRef?.next());
   }
@@ -263,6 +278,12 @@ export class EditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (newStep === 1) this.roomWallService.hideAllWalls();
     else this.roomWallService.regenerateAllWalls();
 
+    if (newStep === 3 && this.furnitureAssets.length === 0) {
+      this.assetsService.getFurnitureAssets().subscribe(assets => {
+        this.furnitureAssets = assets;
+        this.cdr.detectChanges();
+      });
+    }
     this.editorEventsService.setCanvasListeners();
     this.cdr.detectChanges();
   }
