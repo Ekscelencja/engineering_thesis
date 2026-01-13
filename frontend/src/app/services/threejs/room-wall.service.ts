@@ -311,6 +311,9 @@ export class RoomWallService {
 
     // Update area
     this.editorState.roomMetadata[roomIndex].area = calculatePolygonArea(verts);
+    
+    // Notify metadata change
+    this.editorState.emitRoomMetadataChanged();
   }
 
   // Update all rooms that use a given global vertex index

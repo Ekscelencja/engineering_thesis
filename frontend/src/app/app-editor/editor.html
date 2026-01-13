@@ -1,5 +1,7 @@
 <canvas #canvas class="three-canvas"></canvas>
 <!-- Material Stepper UI -->
+<h1 class="editor-project-name">{{ projectTitle }}</h1>
+
 <mat-horizontal-stepper *ngIf="editorStep" #stepper [linear]="true"
 	(selectionChange)="onStepperSelectionChange($event)">
 

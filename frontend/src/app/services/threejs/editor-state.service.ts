@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { WallFeature, WallSide } from '../../models/room-feature.model';
 import { FurnitureAsset } from '../api/assets.service';
+import { Subject } from 'rxjs';
 import * as THREE from 'three';
 
 export interface RoomMetadata {
@@ -39,6 +40,10 @@ export class EditorStateService {
   public vertexHandles: THREE.Mesh[] = [];
   public editingRoomIndex: number | null = null;
   public draggingHandleIndex: number | null = null;
+  public roomMetadataChanged$: Subject<void> = new Subject<void>();
+  public emitRoomMetadataChanged() {
+    this.roomMetadataChanged$.next();
+  }
 
   // Selection state
   public selectedRoomMesh: THREE.Mesh | null = null;

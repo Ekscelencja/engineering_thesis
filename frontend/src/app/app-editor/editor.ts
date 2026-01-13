@@ -23,6 +23,7 @@ import { StepperSelectionEvent } from '@angular/cdk/stepper';
 import { ColorPickerComponent } from './color-picker/color-picker';
 import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
 import { FurniturePreviewComponent } from '../furniture-preview/furniture-preview';
+import { Subscription } from 'rxjs/internal/Subscription';
 
 @Pipe({ name: 'numberToColor' })
 export class NumberToColorPipe implements PipeTransform {
@@ -107,6 +108,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private feedbackData: Feedback[] = [];
 
   private suppressStepperSelectionChange = false;
+  
+  private roomMetadataSub?: Subscription;
 
   public get roomMetadata() {
     return this.editorStateService.roomMetadata;
@@ -171,6 +174,10 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.ngZone.runOutsideAngular(() => {
       this.editorEventsService.setCanvasListeners();
     });
+
+    this.roomMetadataSub = this.editorStateService.roomMetadataChanged$.subscribe(() => {
+      this.cdr.detectChanges();
+    });
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -232,6 +239,9 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.threeRenderService.stopAnimation();
     if (this.threeRenderService.renderer) this.threeRenderService.renderer.dispose();
     this.editorEventsService.deleteCanvasListeners();
+    if (this.roomMetadataSub) {
+      this.roomMetadataSub.unsubscribe();
+    }
   }
 
   public saveProjectToServer() {

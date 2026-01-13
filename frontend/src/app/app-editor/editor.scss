@@ -7,6 +7,17 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+.editor-project-name {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  margin: 0;
+  padding: 0.5rem 0;
+  color: var(--mat-sys-on-surface);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
 .editor-action-panel {
   position: fixed;
   top: 0;
