@@ -23,10 +23,9 @@ export class EditorEventsService {
   private lastPreviewPosition: THREE.Vector3 | null = null;
   private lastPreviewRotationY: number = 0;
   public get selectedRoomIndex(): number {
-    const idx = this.editorStateService.selectedRoomMesh ? this.editorStateService.roomMeshes.indexOf(this.editorStateService.selectedRoomMesh) : -1;
-    console.log('[DEBUG] selectedRoomIndex:', idx);
-    return idx;
+    return this.editorStateService.selectedRoomIndex;
   }
+
   public furniturePlacementActive = false;
   public placingFurnitureModel: THREE.Object3D | null = null;
   public placingFurnitureAsset: FurnitureAsset | null = null;

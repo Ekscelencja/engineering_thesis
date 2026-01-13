@@ -212,21 +212,29 @@ export class RoomWallService {
   // Room selection logic
   onRoomSelect(intersects: THREE.Intersection[], roomMeshes: THREE.Mesh[]) {
     if (intersects.length > 0) {
-      if (this.editorState.selectedRoomMesh) {
-        (this.editorState.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+      const prevIdx = this.editorState.selectedRoomIndex;
+      if (prevIdx !== -1) {
+        const prevMesh = this.editorState.roomMeshes[prevIdx];
+        (prevMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
       }
-      this.editorState.selectedRoomMesh = intersects[0].object as THREE.Mesh;
-      (this.editorState.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0xffff00);
+      const mesh = intersects[0].object as THREE.Mesh;
+      const idx = this.editorState.roomMeshes.indexOf(mesh);
+      if (idx !== -1) {
+        this.editorState.selectedRoomIndex = idx;
+        (mesh.material as THREE.MeshStandardMaterial).emissive.setHex(0xffff00);
+      }
     } else {
-      if (this.editorState.selectedRoomMesh) {
-        (this.editorState.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
-        this.editorState.selectedRoomMesh = null;
+      const prevIdx = this.editorState.selectedRoomIndex;
+      if (prevIdx !== -1) {
+        const prevMesh = this.editorState.roomMeshes[prevIdx];
+        (prevMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
       }
+      this.editorState.selectedRoomIndex = -1;
     }
   }
 
   deleteSelectedRoom() {
-    const idx = this.editorState.roomMeshes.indexOf(this.editorState.selectedRoomMesh!);
+    const idx = this.editorState.selectedRoomIndex;
     if (idx === -1) return;
     // Remove mesh and walls from scene
     this.threeRender.scene.remove(this.editorState.roomMeshes[idx]);
@@ -245,7 +253,7 @@ export class RoomWallService {
     this.editorState.roomMeshes.splice(idx, 1);
     this.editorState.roomMetadata.splice(idx, 1);
     this.editorState.roomVertexIndices.splice(idx, 1);
-    this.editorState.selectedRoomMesh = null;
+    this.editorState.selectedRoomIndex = -1;
     this.regenerateAllWalls();
   }
 
@@ -349,7 +357,7 @@ export class RoomWallService {
     this.editorState.roomMetadata = [];
     this.editorState.globalVertices = [];
     this.editorState.roomVertexIndices = [];
-    this.editorState.selectedRoomMesh = null;
+    this.editorState.selectedRoomIndex = -1;
 
     // Restore from data
     this.editorState.globalVertices = data.globalVertices || [];

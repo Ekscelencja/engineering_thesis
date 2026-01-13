@@ -9,7 +9,7 @@ export interface RoomMetadata {
   type: string;
   area: number;
   color: number;
-  wallFeatures?: WallFeature[][]; // Array of features per wall
+  wallFeatures?: WallFeature[][];
 }
 
 export interface PlacedFurniture {
@@ -46,12 +46,22 @@ export class EditorStateService {
   }
 
   // Selection state
-  public selectedRoomMesh: THREE.Mesh | null = null;
+  private _selectedRoomIndex: number = -1;
+  public selectedRoomIndexChanged$ = new Subject<number>();
+  set selectedRoomIndex(idx: number) {
+    this._selectedRoomIndex = idx;
+    this.selectedRoomIndexChanged$.next(idx);
+  }
+  get selectedRoomIndex(): number {
+    return this._selectedRoomIndex;
+  }
+  get selectedRoomMesh(): THREE.Mesh | null {
+    return (this._selectedRoomIndex >= 0 && this.roomMeshes[this._selectedRoomIndex])
+      ? this.roomMeshes[this._selectedRoomIndex]
+      : null;
+  }
   public selectedWall: THREE.Mesh | null = null;
   public selectedWallSide: WallSide | null = null;
-  public get selectedRoomIndex(): number {
-    return this.selectedRoomMesh ? this.roomMeshes.indexOf(this.selectedRoomMesh) : -1;
-  }
   public selectedFurnitureIndex: number | null = null;
 
   // Control state

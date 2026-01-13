@@ -23,7 +23,7 @@ import { StepperSelectionEvent } from '@angular/cdk/stepper';
 import { ColorPickerComponent } from './color-picker/color-picker';
 import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
 import { FurniturePreviewComponent } from '../furniture-preview/furniture-preview';
-import { Subscription } from 'rxjs/internal/Subscription';
+import { Subscription } from 'rxjs';
 
 @Pipe({ name: 'numberToColor' })
 export class NumberToColorPipe implements PipeTransform {
@@ -110,10 +110,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private suppressStepperSelectionChange = false;
   
   private roomMetadataSub?: Subscription;
+  private selectedRoomIndexSub?: Subscription;
 
   public get roomMetadata() {
     return this.editorStateService.roomMetadata;
   }
+  
   public get selectedRoomMesh() {
     return this.editorStateService.selectedRoomMesh;
   }
@@ -176,6 +178,10 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     });
 
     this.roomMetadataSub = this.editorStateService.roomMetadataChanged$.subscribe(() => {
+      this.cdr.detectChanges();
+    });
+
+    this.selectedRoomIndexSub = this.editorStateService.selectedRoomIndexChanged$.subscribe(() => {
       this.cdr.detectChanges();
     });
   }
@@ -241,6 +247,9 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.editorEventsService.deleteCanvasListeners();
     if (this.roomMetadataSub) {
       this.roomMetadataSub.unsubscribe();
+    }
+    if (this.selectedRoomIndexSub) {
+      this.selectedRoomIndexSub.unsubscribe();
     }
   }
 
