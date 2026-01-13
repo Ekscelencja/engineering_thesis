@@ -64,9 +64,9 @@ export class ProjectsPanelComponent implements OnInit {
 
   setDisplayedColumns() {
     if (this.session.user()?.role === 'architect') {
-      this.displayedColumns = ['title', 'id', 'client', 'actions'];
+      this.displayedColumns = ['title', 'id', 'client', 'status', 'actions'];
     } else {
-      this.displayedColumns = ['title', 'id', 'actions'];
+      this.displayedColumns = ['title', 'id', 'status', 'actions'];
     }
   }
 
@@ -74,12 +74,27 @@ export class ProjectsPanelComponent implements OnInit {
     this.loading.set(true);
     this.projectService.getProjects().subscribe({
       next: (projects) => {
-        // Add clientName for table if available
-        const projectsWithClient = projects.map((p: any) => ({
+        const user = this.session.user();
+        let projectsWithClient = projects.map((p: any) => ({
           ...p,
           clientName: p.client?.name || p.clientName || ''
         }));
-        console.log('Fetched projects', projectsWithClient);
+
+
+        // Filter projects for current architect or client
+        if (user) {
+          const userId = user.id;
+          if (user.role === 'architect') {
+            projectsWithClient = projectsWithClient.filter(
+              (p: any) => p.architect?._id === userId
+            );
+          } else if (user.role === 'client') {
+            projectsWithClient = projectsWithClient.filter(
+              (p: any) => p.client?._id === userId
+            );
+          }
+        }
+
         this.projects.set(projectsWithClient);
         this.loading.set(false);
       },
@@ -88,7 +103,6 @@ export class ProjectsPanelComponent implements OnInit {
         this.loading.set(false);
       }
     });
-
   }
 
   openCreateProjectDialog() {

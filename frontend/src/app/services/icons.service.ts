@@ -21,7 +21,8 @@ export class IconsService {
     'door',
     'save',
     'close',
-    'chevron'
+    'chevron',
+    'check',
     // Add more icon names as needed (without .svg extension)
   ];
 

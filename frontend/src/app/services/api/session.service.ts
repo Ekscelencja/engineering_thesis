@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 
 export interface SessionUser {
-  _id: string;
+  id: string;
   name: string;
   email: string;
   role: 'architect' | 'client';

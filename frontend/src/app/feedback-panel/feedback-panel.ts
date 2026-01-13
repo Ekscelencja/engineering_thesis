@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
@@ -22,8 +22,9 @@ import { SessionService } from '../services/api/session.service';
 })
 export class FeedbackPanelComponent implements OnInit {
   feedbacks: Feedback[] = [];
-  loading = true;
-  displayedColumns = ['project', 'elementType', 'message', 'status', 'createdAt', 'actions'];
+  loading = signal(false);
+  userType: string | null = null;
+  displayedColumns = ['project', 'author', 'elementType', 'message', 'status', 'createdAt', 'actions'];
 
   constructor(
     private notificationService: NotificationService,
@@ -32,18 +33,20 @@ export class FeedbackPanelComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadFeedback();
+    this.userType = this.session.user()?.role || null;
   }
 
   loadFeedback(): void {
-    this.loading = true;
+    this.loading.set(true);
     this.notificationService.getMyFeedback().subscribe({
       next: (feedbacks) => {
+        console.log('Loaded feedback:', feedbacks);
         this.feedbacks = feedbacks;
-        this.loading = false;
+        this.loading.set(false);
       },
       error: (err) => {
         console.error('Failed to load feedback:', err);
-        this.loading = false;
+        this.loading.set(false);
       }
     });
   }
@@ -69,9 +72,5 @@ export class FeedbackPanelComponent implements OnInit {
       next: () => this.loadFeedback(),
       error: (err) => console.error('Failed to delete feedback:', err)
     });
-  }
-
-  isArchitect(): boolean {
-    return this.session.user()?.role === 'architect';
   }
 }
