@@ -12,6 +12,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSelectModule } from '@angular/material/select';
 import { FeedbackDialogComponent, FeedbackDialogData } from '../feedback/feedback-dialog/feedback-dialog';
 import { FeedbackViewDialogComponent } from '../feedback/feedback-view-dialog/feedback-view-dialog';
 import { NotificationService, Feedback } from '../services/api/notification.service';
@@ -44,6 +45,7 @@ export class NumberToColorPipe implements PipeTransform {
     MatInputModule,
     MatIconModule,
     MatTableModule,
+    MatSelectModule,
     NumberToColorPipe,
     ColorPickerComponent,
     FurniturePreviewComponent
@@ -63,6 +65,23 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     { type: 'wtexture', label: 'Wall Texture', expanded: false },
     { type: 'fcolor', label: 'Floor Color', expanded: false },
     { type: 'ftexture', label: 'Floor Texture', expanded: false }
+  ];
+
+  roomTypes = [
+    { key: 'living_room', label: 'Living Room' },
+    { key: 'bedroom', label: 'Bedroom' },
+    { key: 'bathroom', label: 'Bathroom' },
+    { key: 'kitchen', label: 'Kitchen' },
+    { key: 'hall', label: 'Hall' },
+    { key: 'corridor', label: 'Corridor' },
+    { key: 'dining_room', label: 'Dining Room' },
+    { key: 'office', label: 'Office' },
+    { key: 'study', label: 'Study' },
+    { key: 'storage', label: 'Storage' },
+    { key: 'utility_room', label: 'Utility Room' },
+    { key: 'laundry_room', label: 'Laundry Room' },
+    { key: 'closet', label: 'Closet' },
+    { key: 'walk_in_closet', label: 'Walk-in Closet' }
   ];
 
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
@@ -339,6 +358,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   startPlacingFeature(type: 'window' | 'door') {
     this.editorStateService.placingFeatureType = type;
     this.editorEventsService.initFeaturePreview();
+  }
+
+  onRoomTypeChange(index: number, type: string) {
+    this.editorStateService.roomMetadata[index].type = type;
+  }
+
+  getRoomTypeLabel(key: string): string {
+    return this.roomTypes.find(rt => rt.key === key)?.label || 'Type: N/A';
   }
 
   onWallColorPicked(ev: { hex: string; num: number }) {

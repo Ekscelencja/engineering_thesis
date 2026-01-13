@@ -35,7 +35,25 @@ const floorAppearanceSchema = new mongoose.Schema({
 
 const roomMetadataSchema = new mongoose.Schema({
   name: String,
-  type: String,
+  type: {
+    type: String,
+    enum: [
+      'living_room',
+      'bedroom',
+      'bathroom',
+      'kitchen',
+      'hall',
+      'corridor',
+      'dining_room',
+      'office',
+      'study',
+      'storage',
+      'utility_room',
+      'laundry_room',
+      'closet',
+      'walk_in_closet'
+    ]
+  },
   area: Number,
   color: Number,
   wallFeatures: [[WallFeatureSchema]]

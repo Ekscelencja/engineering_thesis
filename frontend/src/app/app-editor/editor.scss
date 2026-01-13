@@ -114,6 +114,17 @@
         font-size: 0.875rem;
         opacity: 0.8;
       }
+
+      .room-type-dropdown {
+        width: 100%;
+        margin: 0.5rem 0;
+
+        ::ng-deep {
+          .mat-mdc-form-field-subscript-wrapper {
+            display: none !important;
+          }
+        }
+      }
     }
   }
 

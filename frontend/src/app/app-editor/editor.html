@@ -1,46 +1,37 @@
 <canvas #canvas class="three-canvas"></canvas>
 <!-- Material Stepper UI -->
-<mat-horizontal-stepper
-  *ngIf="editorStep"
-  #stepper
-  [linear]="true"
-  (selectionChange)="onStepperSelectionChange($event)">
+<mat-horizontal-stepper *ngIf="editorStep" #stepper [linear]="true"
+	(selectionChange)="onStepperSelectionChange($event)">
 
-  <mat-step
-    [completed]="step1Completed"
-    [editable]="step1Completed"
-    [optional]="false">
-    <ng-template matStepLabel>Draw Rooms</ng-template>
-    <div></div>
-    <button mat-button *ngIf="canEdit" (click)="onNextFromStep1()">Next</button>
-  </mat-step>
+	<mat-step [completed]="step1Completed" [editable]="step1Completed" [optional]="false">
+		<ng-template matStepLabel>Draw Rooms</ng-template>
+		<div></div>
+		<button mat-button *ngIf="canEdit" (click)="onNextFromStep1()">Next</button>
+	</mat-step>
 
-  <mat-step
-    [completed]="step2Completed"
-    [editable]="step2Completed"
-    [optional]="false">
-    <ng-template matStepLabel>Walls & Features</ng-template>
-    <div></div>
-    <button mat-button *ngIf="canEdit" (click)="onBackToStep1()">Back</button>
-    <button mat-button *ngIf="canEdit" (click)="onNextFromStep2()">Next</button>
-  </mat-step>
+	<mat-step [completed]="step2Completed" [editable]="step2Completed" [optional]="false">
+		<ng-template matStepLabel>Walls & Features</ng-template>
+		<div></div>
+		<button mat-button *ngIf="canEdit" (click)="onBackToStep1()">Back</button>
+		<button mat-button *ngIf="canEdit" (click)="onNextFromStep2()">Next</button>
+	</mat-step>
 
-  <mat-step [optional]="false">
-    <ng-template matStepLabel>Furnishing</ng-template>
-    <div></div>
-    <button mat-button *ngIf="canEdit" (click)="onBackToStep2()">Back</button>
-  </mat-step>
+	<mat-step [optional]="false">
+		<ng-template matStepLabel>Furnishing</ng-template>
+		<div></div>
+		<button mat-button *ngIf="canEdit" (click)="onBackToStep2()">Back</button>
+	</mat-step>
 
 </mat-horizontal-stepper>
 
 <div class="feedback-mode-banner" *ngIf="feedbackMode">
-  <mat-icon svgIcon="feedback" aria-hidden="true" class="action-icon"></mat-icon>
-  <span>Feedback Mode: Click on any element (room, wall, or furniture) to leave feedback</span>
+	<mat-icon svgIcon="feedback" aria-hidden="true" class="action-icon"></mat-icon>
+	<span>Feedback Mode: Click on any element (room, wall, or furniture) to leave feedback</span>
 </div>
 
 <div class="view-only-banner" *ngIf="viewOnly && !feedbackMode">
-  <mat-icon svgIcon="view" aria-hidden="true" class="action-icon"></mat-icon>
-  <span>View Only Mode: You can view but not edit this project</span>
+	<mat-icon svgIcon="view" aria-hidden="true" class="action-icon"></mat-icon>
+	<span>View Only Mode: You can view but not edit this project</span>
 </div>
 
 <div class="editor-action-panel" [class.expanded]="actionPanelExpanded" *ngIf="canEdit">
@@ -65,7 +56,17 @@
 		<div *ngFor="let room of roomMetadata; let i = index" class="room-metadata-summary"
 			[class.selected]="i === selectedRoomIndex">
 			<p class="room-name" [style.color]="room.color | numberToColor">{{ room.name || 'Room ' + (i+1) }}</p>
-			<p class="room-type">{{ room.type || 'Type: N/A' }}</p>
+			<ng-container *ngIf="editorStep === 1 && canEdit; else typeText">
+				<mat-form-field appearance="fill" class="room-type-dropdown">
+					<mat-label>Room Type</mat-label>
+					<mat-select [(ngModel)]="room.type" (selectionChange)="onRoomTypeChange(i, room.type)">
+						<mat-option *ngFor="let rt of roomTypes" [value]="rt.key">{{ rt.label }}</mat-option>
+					</mat-select>
+				</mat-form-field>
+			</ng-container>
+			<ng-template #typeText>
+				<p class="room-type">{{ getRoomTypeLabel(room.type) }}</p>
+			</ng-template>
 			<p class="room-area">Area: {{ room.area | number:'1.2-2' }} m²</p>
 		</div>
 	</div>
