@@ -30,12 +30,12 @@ export class NavbarPanel {
       return path.charAt(0).toUpperCase() + path.slice(1);
     };
 
-    this.currentLocalization = sanitize(this.router.url);
+    this.currentLocalization = sanitize(this.router.url.split('?')[0]);
     this.router.events.subscribe(() => {
-      this.currentLocalization = sanitize(this.router.url);
+      this.currentLocalization = sanitize(this.router.url.split('?')[0]);
     });
   }
-  
+
   currentLocalization: string = '';
 
   navLinks = [

@@ -10,6 +10,7 @@ import { EditorComponent } from '../app-editor/editor';
 import { ProjectService, ProjectData } from '../services/api/project.service';
 import { SessionService } from '../services/api/session.service';
 import { IconsService } from '../services/icons.service';
+import { ActivatedRoute, Router } from '@angular/router';
 
 
 @Component({
@@ -59,7 +60,9 @@ export class ProjectsPanelComponent implements OnInit {
   constructor(
     private projectService: ProjectService,
     public session: SessionService,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private route: ActivatedRoute,
+    private router: Router
   ) { }
 
   ngOnInit() {
@@ -67,6 +70,16 @@ export class ProjectsPanelComponent implements OnInit {
     this.userType = this.session.user()?.role || null;
     this.fetchProjects();
     this.setDisplayedColumns();
+
+    this.route.queryParams.subscribe(params => {
+      if (params['create'] === 'true') {
+        this.openCreateProjectDialog();
+      }
+      if (params['edit']) {
+        this.editProjectFromId(params['edit']);
+      }
+      this.router.navigate([], { queryParams: {} });
+    });
   }
 
   setDisplayedColumns() {
@@ -129,6 +142,11 @@ export class ProjectsPanelComponent implements OnInit {
   // (create/cancel logic now handled in dialog)
   editProject(project: ProjectData) {
     this.selectedProjectId = project._id || null;
+    this.showEditorOnly.set(true);
+  }
+
+  editProjectFromId(projectId: string) {
+    this.selectedProjectId = projectId;
     this.showEditorOnly.set(true);
   }
 

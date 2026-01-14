@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { CommonModule, NgClass, NgFor, DatePipe, TitleCasePipe } from '@angular/common';
 import { ProjectService } from '../services/api/project.service';
 import { NotificationService } from '../services/api/notification.service';
@@ -33,7 +33,8 @@ export class DashboardPanelComponent implements OnInit {
   constructor(
     private projectService: ProjectService,
     private notificationService: NotificationService,
-    private router: Router
+    private router: Router,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -43,6 +44,7 @@ export class DashboardPanelComponent implements OnInit {
       this.recentProjects = projects
         .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
         .slice(0, 5);
+      this.cdr.detectChanges();
       console.log('Recent projects:', this.recentProjects);
     });
     this.notificationService.getMyFeedback().subscribe(feedback => {
@@ -50,12 +52,13 @@ export class DashboardPanelComponent implements OnInit {
       this.recentFeedback = feedback
         .sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime())
         .slice(0, 5);
+      this.cdr.detectChanges();
       console.log('Recent feedback:', this.recentFeedback);
     });
   }
 
   createProject() {
-    this.router.navigate(['/projects']);
+    this.router.navigate(['/projects'], { queryParams: { create: 'true' } });
   }
   goToAssets() {
     this.router.navigate(['/assets']);
@@ -64,6 +67,6 @@ export class DashboardPanelComponent implements OnInit {
     this.router.navigate(['/feedback']);
   }
   openProject(id: string) {
-    this.router.navigate(['/projects', id]);
+    this.router.navigate(['/projects'], { queryParams: { edit: id } });
   }
 }
