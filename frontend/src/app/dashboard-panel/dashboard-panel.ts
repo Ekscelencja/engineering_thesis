@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { CommonModule, NgClass, NgFor, DatePipe, TitleCasePipe } from '@angular/common';
 import { ProjectService } from '../services/api/project.service';
 import { NotificationService } from '../services/api/notification.service';
+import { SessionService } from '../services/api/session.service';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -29,31 +30,59 @@ export class DashboardPanelComponent implements OnInit {
   pendingFeedbackCount = 0;
   recentFeedback: any[] = [];
   recentProjects: any[] = [];
+  userRole: string | null | undefined = null;
 
   constructor(
     private projectService: ProjectService,
     private notificationService: NotificationService,
+    private session: SessionService,
     private router: Router,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) { }
 
   ngOnInit() {
-    this.projectService.getProjects().subscribe((projects: any[]) => {
-      this.activeProjectsCount = projects.filter((p: any) => p.status !== 'archived').length;
-      this.archivedProjectsCount = projects.filter((p: any) => p.status === 'archived').length;
-      this.recentProjects = projects
-        .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-        .slice(0, 5);
-      this.cdr.detectChanges();
-      console.log('Recent projects:', this.recentProjects);
-    });
+    const user = this.session.user();
+    const userId = user?.id;
+    this.userRole = user?.role;
+    
     this.notificationService.getMyFeedback().subscribe(feedback => {
-      this.pendingFeedbackCount = feedback.filter(fb => fb.status === 'pending').length;
-      this.recentFeedback = feedback
+      let filteredFeedback = feedback;
+      if (userId && this.userRole) {
+        if (this.userRole === 'architect') {
+          filteredFeedback = feedback.filter(fb => {
+            const targetId = typeof fb.targetUser === 'string' ? fb.targetUser : fb.targetUser?._id;
+            return targetId === userId;
+          });
+        } else if (this.userRole === 'client') {
+          filteredFeedback = feedback.filter(fb => {
+            const authorId = typeof fb.author === 'string' ? fb.author : fb.author?._id;
+            return authorId === userId;
+          });
+        }
+      }
+      this.pendingFeedbackCount = filteredFeedback.filter(fb => fb.status === 'pending').length;
+      this.recentFeedback = filteredFeedback
         .sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime())
         .slice(0, 5);
       this.cdr.detectChanges();
       console.log('Recent feedback:', this.recentFeedback);
+    });
+
+    this.projectService.getProjects().subscribe((projects: any[]) => {
+      // Filter projects for current user
+      let filteredProjects = projects;
+      if (this.userRole === 'architect') {
+        filteredProjects = projects.filter(p => p.architect?._id === userId);
+      } else if (this.userRole === 'client') {
+        filteredProjects = projects.filter(p => p.client?._id === userId);
+      }
+      this.activeProjectsCount = filteredProjects.filter((p: any) => p.status !== 'archived').length;
+      this.archivedProjectsCount = filteredProjects.filter((p: any) => p.status === 'archived').length;
+      this.recentProjects = filteredProjects
+        .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 5);
+      this.cdr.detectChanges();
+      console.log('Recent projects:', this.recentProjects);
     });
   }
 

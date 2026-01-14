@@ -1,6 +1,6 @@
 <div class="dashboard-panel">
   <div class="dashboard-shortcuts">
-    <button mat-flat-button color="primary" (click)="createProject()">Create Project</button>
+    <button *ngIf="userRole === 'architect'" mat-flat-button color="primary" (click)="createProject()">Create Project</button>
     <button mat-flat-button (click)="goToAssets()">View Assets</button>
     <button mat-flat-button (click)="giveFeedback()">Check Feedback</button>
   </div>
@@ -24,7 +24,7 @@
       </span>
     </div>
   </div>
-  <div class="dashboard-section recent-feedback">
+  <div class="dashboard-section recent-feedback" *ngIf="recentFeedback.length > 0">
     <h2>Recent Feedback</h2>
     <div class="dashboard-section-row feedback-row" *ngFor="let fb of recentFeedback">
       <span class="feedback-project">Project name: {{fb.project.title}}</span>
@@ -34,8 +34,9 @@
       <span class="feedback-message" title="{{fb.message}}">{{fb.message}}</span>
     </div>
   </div>
-  <div class="dashboard-section recent-projects">
-    <h2>Recently Worked On Projects</h2>
+  <div class="dashboard-section recent-projects" *ngIf="recentProjects.length > 0">
+    <h2 *ngIf="userRole === 'architect'">Recently Worked On Projects</h2>
+    <h2 *ngIf="userRole === 'client'">Your projects</h2>
     <div class="dashboard-section-row project-row" *ngFor="let proj of recentProjects">
       <span class="project-title">Project name: {{proj.title}}</span>
       <span class="project-status" [ngClass]="proj.status">{{proj.status | titlecase}}</span>
