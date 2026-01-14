@@ -28,7 +28,7 @@ export class AssetsService {
     return this.http.get<FurnitureAsset[]>(`${this.apiUrl}/furniture`);
   }
 
-  getTextureAssets(type?: 'floor' | 'wall'): Observable<TextureAsset[]> {
-    return this.http.get<TextureAsset[]>(`${this.apiUrl}/textures`, { params: type ? { type } : {} });
+  getTextures(type: 'wall' | 'floor') {
+    return this.http.get<{ name: string, file: string, url: string }[]>(`/api/assets/textures?type=${type}`);
   }
 }

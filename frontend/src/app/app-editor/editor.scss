@@ -222,9 +222,51 @@
     }
   }
 
+  .texture-tile-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+    max-height: 22.5rem;
+    overflow-y: auto;
+
+
+    .texture-tile {
+      border-radius: 6px;
+      padding: 1rem;
+      cursor: pointer;
+      width: calc(50% - .25rem);
+      text-align: center;
+      transition: border 0.2s;
+      background: #23202a;
+      box-sizing: border-box;
+      border: 1px solid var(--mat-sys-primary);
+
+      &.selected {
+        border-color: var(--mat-sys-on-surface);
+        background: #504c5a;
+      }
+
+      img {
+        width: 48px;
+        height: 48px;
+        object-fit: cover;
+        border-radius: 4px;
+      }
+
+      span {
+        display: block;
+        font-size: 0.75rem;
+        margin-top: 2px;
+        color: var(--mat-sys-on-surface);
+      }
+    }
+  }
+
+
   .furniture-assets-gallery {
     width: 100%;
-    max-height: calc(100vh - 410px); // total height minus paddings and other sections
+    max-height: calc(100vh - 410px);
     overflow-y: auto;
     display: flex;
     gap: 1rem;
@@ -237,12 +279,17 @@
       flex-direction: column;
       align-items: center;
       cursor: pointer;
+      box-sizing: border-box;
+      padding: 1rem;
+      border-radius: 8px;
+      background: #23202a;
       width: calc(50% - 0.5rem);
       height: max-content;
+      border: 1px solid var(--mat-sys-primary);
 
       p {
         margin: 0.5rem 0 0 0;
-        color: var(--mat-sys-primary);
+        color: var(--mat-sys-on-surface);
         font-size: 0.875rem;
         text-align: center;
       }

@@ -60,6 +60,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   public floorTexture: string = '';
   public furnitureAssets: FurnitureAsset[] = [];
   public placedFurniture: { asset: FurnitureAsset, position: THREE.Vector3, rotation: number }[] = [];
+  public wallTextures: { name: string, file: string, url: string }[] = [];
+  public floorTextures: { name: string, file: string, url: string }[] = [];
 
   wallFeatureRows = [
     { type: 'features', label: 'Wall Features', expanded: false },
@@ -157,8 +159,9 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   ngOnInit() {
     if (this.projectData?.status) {
       this.projectStatus = this.projectData.status;
-      console.log('Loaded project status:', this.projectStatus);
     }
+    this.assetsService.getTextures('wall').subscribe(list => this.wallTextures = list);
+    this.assetsService.getTextures('floor').subscribe(list => this.floorTextures = list);
   }
 
   ngAfterViewInit() {
@@ -411,6 +414,11 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.roomWallService.applyWallColorToMesh(wall, this.wallColor, side);
   }
 
+  selectWallTexture(tex: { name: string, file: string, url: string }) {
+    this.wallTexture = tex.name;
+    this.applyWallTexture();
+  }
+
   applyWallTexture() {
     const wall = this.editorStateService.selectedWall;
     const side = this.editorStateService.selectedWallSide;
@@ -425,6 +433,11 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const mesh = this.editorStateService.roomMeshes[idx];
     const roomKey = idx.toString();
     this.roomWallService.applyFloorColorToMesh(mesh, this.floorColor, roomKey);
+  }
+
+  selectFloorTexture(tex: { name: string, file: string, url: string }) {
+    this.floorTexture = tex.name;
+    this.applyFloorTexture();
   }
 
   applyFloorTexture() {

@@ -127,13 +127,18 @@
 								</app-color-picker>
 							</ng-container>
 
+							<!-- Wall Texture Picker -->
 							<ng-container *ngIf="row.type === 'wtexture'">
-								<label>Wall Texture:</label>
-								<select [(ngModel)]="wallTexture" (change)="applyWallTexture()">
-									<option value="">None</option>
-									<option value="wallpaper_1">Wallpaper 1</option>
-									<option value="wallpaper_2">Wallpaper 2</option>
-								</select>
+							  <label>Wall Texture:</label>
+							  <div class="texture-tile-list">
+							    <div *ngFor="let tex of wallTextures"
+							         class="texture-tile"
+							         [class.selected]="wallTexture === tex.name"
+							         (click)="selectWallTexture(tex)">
+							      <img [src]="tex.url" [alt]="tex.name" />
+							      <span>{{ tex.name }}</span>
+							    </div>
+							  </div>
 							</ng-container>
 
 							<ng-container *ngIf="row.type === 'fcolor'">
@@ -142,15 +147,18 @@
 								</app-color-picker>
 							</ng-container>
 
+							<!-- Floor Texture Picker -->
 							<ng-container *ngIf="row.type === 'ftexture'">
-								<label>Floor Texture:</label>
-								<select [(ngModel)]="floorTexture" (change)="applyFloorTexture()">
-									<option value="">None</option>
-									<option value="floor_1">Floor 1</option>
-									<option value="floor_2">Floor 2</option>
-									<option value="floor_3">Floor 3</option>
-									<option value="floor_4">Floor 4</option>
-								</select>
+							  <label>Floor Texture:</label>
+							  <div class="texture-tile-list">
+							    <div *ngFor="let tex of floorTextures"
+							         class="texture-tile"
+							         [class.selected]="floorTexture === tex.name"
+							         (click)="selectFloorTexture(tex)">
+							      <img [src]="tex.url" [alt]="tex.name" />
+							      <span>{{ tex.name }}</span>
+							    </div>
+							  </div>
 							</ng-container>
 						</ng-container>
 					</div>

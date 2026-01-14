@@ -391,7 +391,7 @@ export class RoomWallService {
         if (appearance.color) mat.color = new THREE.Color(appearance.color);
         if (appearance.texture) {
           const texLoader = new THREE.TextureLoader();
-          const url = `assets/textures/${appearance.texture}.jpg`;
+          const url = `assets/textures/floors/${appearance.texture}.jpg`;
           const tex = texLoader.load(url);
           tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
           mat.map = tex;
@@ -495,7 +495,7 @@ export class RoomWallService {
         if (data.color) { mat.color = new THREE.Color(data.color); console.log(`Applied color ${data.color} to wall ${wallKey} side ${side}`); }
         if (data.texture) {
           const texLoader = new THREE.TextureLoader();
-          const url = `assets/textures/${data.texture}.jpg`;
+          const url = `assets/textures/walls/${data.texture}.jpg`;
           const tex = texLoader.load(url);
           tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
           mat.map = tex;
@@ -570,7 +570,7 @@ export class RoomWallService {
       mat.map = null;
     } else {
       const texLoader = new THREE.TextureLoader();
-      const url = `assets/textures/${textureId}.jpg`;
+      const url = `assets/textures/walls/${textureId}.jpg`;
       const tex = texLoader.load(url);
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       mat.map = tex;
@@ -604,7 +604,7 @@ export class RoomWallService {
       mat.map = null;
     } else {
       const texLoader = new THREE.TextureLoader();
-      const url = `assets/textures/${textureId}.jpg`;
+      const url = `assets/textures/floors/${textureId}.jpg`;
       const tex = texLoader.load(
         url,
         () => console.log('Texture loaded:', url),
