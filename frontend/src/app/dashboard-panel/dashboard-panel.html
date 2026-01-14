@@ -1,4 +1,51 @@
-<div class="dashboard-container">
-  <h2>Welcome to the Dashboard</h2>
-  <!-- User info and future features go here -->
+<div class="dashboard-panel">
+  <div class="dashboard-shortcuts">
+    <button mat-flat-button color="primary" (click)="createProject()">Create Project</button>
+    <button mat-flat-button (click)="goToAssets()">View Assets</button>
+    <button mat-flat-button (click)="giveFeedback()">Give Feedback</button>
+  </div>
+  <div class="dashboard-stats">
+    <div class="stat-card">
+      Active Projects:
+      <span class="stat-card-count">
+        {{activeProjectsCount}}
+      </span>
+    </div>
+    <div class="stat-card">
+      Archived Projects:
+      <span class="stat-card-count">
+        {{archivedProjectsCount}}
+      </span>
+    </div>
+    <div class="stat-card">
+      Pending Feedback:
+      <span class="stat-card-count">
+        {{pendingFeedbackCount}}
+      </span>
+    </div>
+  </div>
+  <div class="dashboard-section recent-feedback">
+    <h2>Recent Feedback</h2>
+    <div class="dashboard-section-row feedback-row" *ngFor="let fb of recentFeedback">
+      <span class="feedback-project">Project name: {{fb.project.title}}</span>
+      <span class="feedback-status" [ngClass]="fb.status">{{fb.status | titlecase}}</span>
+      <span class="feedback-user">{{fb.author.name}}</span>
+      <span class="feedback-date">{{fb.createdAt | date:'short'}}</span>
+      <span class="feedback-message" title="{{fb.message}}">{{fb.message}}</span>
+    </div>
+  </div>
+  <div class="dashboard-section recent-projects">
+    <h2>Recently Worked On Projects</h2>
+    <div class="dashboard-section-row project-row" *ngFor="let proj of recentProjects">
+      <span class="project-title">Project name: {{proj.title}}</span>
+      <span class="project-status" [ngClass]="proj.status">{{proj.status | titlecase}}</span>
+      <span class="project-updated">Last updated: {{proj.updatedAt | date:'short'}}</span>
+      <span class="project-architect-name">Architect: {{proj.architect.name}}</span>
+      <span class="project-client-name">Client: {{proj.client.name}}</span>
+      <button mat-icon-button color="warn" (click)="openProject(proj._id)" [matTooltip]="'Open Project'"
+        class="action-button">
+        <mat-icon svgIcon="open_in_new" aria-hidden="true" class="action-icon"></mat-icon>
+      </button>
+    </div>
+  </div>
 </div>

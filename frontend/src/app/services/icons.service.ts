@@ -23,6 +23,7 @@ export class IconsService {
     'close',
     'chevron',
     'check',
+    'open_in_new',
     // Add more icon names as needed (without .svg extension)
   ];
 
