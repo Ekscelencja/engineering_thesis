@@ -6,6 +6,7 @@ export interface ProjectData {
   _id?: string;
   title: string;
   client: string;
+  status?: 'draft' | 'in_review' | 'approved' | 'archived';
   globalVertices: { x: number; z: number }[];
   roomVertexIndices: number[][];
   roomMetadata: { name: string; type: string; area: number }[];

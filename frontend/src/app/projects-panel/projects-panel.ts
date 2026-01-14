@@ -49,6 +49,13 @@ export class ProjectsPanelComponent implements OnInit {
   public confirmDialogRef: MatDialogRef<any> | null = null;
   confirmDialogData: { title: string; question: string; confirmText: string; color: string; onConfirm: () => void } | null = null;
 
+  statusLabels: Record<string, string> = {
+    draft: 'Draft',
+    in_review: 'In Review',
+    approved: 'Approved',
+    archived: 'Archived'
+  };
+
   constructor(
     private projectService: ProjectService,
     public session: SessionService,

@@ -53,6 +53,7 @@ export class NumberToColorPipe implements PipeTransform {
   ]
 })
 export class EditorComponent implements AfterViewInit, OnDestroy {
+  public projectStatus: 'draft' | 'in_review' | 'approved' | 'archived' = 'draft';
   public wallColor: string = '';
   public wallTexture: string = '';
   public floorColor: string = '';
@@ -153,6 +154,13 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     private notificationService: NotificationService  // Add this
   ) { }
 
+  ngOnInit() {
+    if (this.projectData?.status) {
+      this.projectStatus = this.projectData.status;
+      console.log('Loaded project status:', this.projectStatus);
+    }
+  }
+
   ngAfterViewInit() {
     this.threeRenderService.init(this.canvasRef.nativeElement);
     this.threeRenderService.animate();
@@ -193,6 +201,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
           this.isNewProject = false;
           this.projectTitle = data.title;
           this.clientId = data.client;
+          this.projectStatus = data.status || 'draft';
 
           const step = ((data.editorStep || 1) as 1 | 2 | 3);
           this.editorStateService.editorStep = step;
@@ -257,6 +266,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const project: ProjectData = {
       title: this.isNewProject ? this.newProjectTitle! : this.projectTitle!,
       client: this.isNewProject ? this.newProjectClientId! : this.clientId!,
+      status: this.projectStatus,
       globalVertices: this.editorStateService.globalVertices,
       roomVertexIndices: this.editorStateService.roomVertexIndices,
       roomMetadata: this.editorStateService.roomMetadata,
@@ -274,6 +284,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
         next: (saved) => (alert('Project saved! ID: ' + saved._id),
           this.projectId = saved._id!,
           this.clientId = saved.client!,
+          this.projectStatus = saved.status!,
           this.projectTitle = saved.title,
           this.isNewProject = false
         ),
@@ -285,6 +296,11 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
         error: (err) => alert('Update failed: ' + err.message)
       });
     }
+  }
+
+  onProjectStatusChange(newStatus: 'draft' | 'in_review' | 'approved' | 'archived') {
+    this.projectStatus = newStatus;
+    this.saveProjectToServer();
   }
 
   public exitEditor() {

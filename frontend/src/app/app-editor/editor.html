@@ -1,27 +1,39 @@
 <canvas #canvas class="three-canvas"></canvas>
-<!-- Material Stepper UI -->
-<h1 class="editor-project-name">{{ projectTitle }}</h1>
 
+<div class="status-title-wrapper">
+	<h1 class="editor-project-name">{{ projectTitle }}</h1>
+	<mat-form-field appearance="fill" class="project-status-dropdown" *ngIf="canEdit">
+		<mat-label>Project Status</mat-label>
+		<mat-select [(ngModel)]="projectStatus" (selectionChange)="onProjectStatusChange($event.value)" [disabled]="projectStatus === 'archived'">
+			<mat-option value="draft">Draft</mat-option>
+			<mat-option value="in_review">In Review</mat-option>
+			<mat-option value="approved">Approved</mat-option>
+			<mat-option value="archived">Archived</mat-option>
+		</mat-select>
+	</mat-form-field>
+</div>
+
+<!-- Material Stepper UI -->
 <mat-horizontal-stepper *ngIf="editorStep" #stepper [linear]="true"
 	(selectionChange)="onStepperSelectionChange($event)">
 
 	<mat-step [completed]="step1Completed" [editable]="step1Completed" [optional]="false">
 		<ng-template matStepLabel>Draw Rooms</ng-template>
 		<div></div>
-		<button mat-button *ngIf="canEdit" (click)="onNextFromStep1()">Next</button>
+		<button mat-button *ngIf="canEdit && projectStatus !== 'archived'" (click)="onNextFromStep1()">Next</button>
 	</mat-step>
 
 	<mat-step [completed]="step2Completed" [editable]="step2Completed" [optional]="false">
 		<ng-template matStepLabel>Walls & Features</ng-template>
 		<div></div>
-		<button mat-button *ngIf="canEdit" (click)="onBackToStep1()">Back</button>
-		<button mat-button *ngIf="canEdit" (click)="onNextFromStep2()">Next</button>
+		<button mat-button *ngIf="canEdit && projectStatus !== 'archived'" (click)="onBackToStep1()">Back</button>
+		<button mat-button *ngIf="canEdit && projectStatus !== 'archived'" (click)="onNextFromStep2()">Next</button>
 	</mat-step>
 
 	<mat-step [optional]="false">
 		<ng-template matStepLabel>Furnishing</ng-template>
 		<div></div>
-		<button mat-button *ngIf="canEdit" (click)="onBackToStep2()">Back</button>
+		<button mat-button *ngIf="canEdit && projectStatus !== 'archived'" (click)="onBackToStep2()">Back</button>
 	</mat-step>
 
 </mat-horizontal-stepper>
@@ -36,7 +48,12 @@
 	<span>View Only Mode: You can view but not edit this project</span>
 </div>
 
-<div class="editor-action-panel" [class.expanded]="actionPanelExpanded" *ngIf="canEdit">
+<div class="archived-baner" *ngIf="projectStatus === 'archived'">
+	<mat-icon svgIcon="archive" aria-hidden="true" class="action-icon"></mat-icon>
+	<span>This project is archived and cannot be edited</span>
+</div>
+
+<div class="editor-action-panel" [class.expanded]="actionPanelExpanded" *ngIf="canEdit && projectStatus !== 'archived'">
 	<button class="expand-collapse-button" [class.expanded]="actionPanelExpanded"
 		(click)="actionPanelExpanded = !actionPanelExpanded">
 		<mat-icon svgIcon="chevron" class="nav-icon" aria-hidden="true"></mat-icon>

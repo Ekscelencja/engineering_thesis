@@ -89,8 +89,39 @@
     .mat-row {
       background: #18141a;
       transition: background 0.2s;
+
       &:hover {
         background: #23202a;
+      }
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 500;
+      display: inline-block;
+      min-width: 80px;
+      text-align: center;
+
+      &.draft {
+        background: #e3f2fd;
+        color: #1565c0;
+      }
+
+      &.in_review {
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      &.approved {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      &.archived {
+        background: #eeeeee;
+        color: #616161;
       }
     }
   }
