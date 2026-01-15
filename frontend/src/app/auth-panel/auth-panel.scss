@@ -3,19 +3,19 @@
 }
 
 .auth-container {
-    padding: 16px;
+    padding: 1rem;
     max-width: fit-content;
-    border: 2px solid var(--mat-sys-primary);
+    border: 0.125rem solid var(--mat-sys-primary);
 
     form {
-        width: 300px;
+        width: 18.75rem;
         margin: auto;
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 1rem;
     }
 
     .action-button {
-        margin-bottom: 16px;
+        margin-bottom: 1rem;
     }
 }

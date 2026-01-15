@@ -16,15 +16,15 @@
     position: fixed;
     top: 1rem;
     right: 1rem;
-    height: 32px;
+    height: 2rem;
   }
 
   .projects-table-container {
-    max-height: calc(100vh - 8rem); // Adjust as needed for your layout
+    max-height: calc(100vh - 8rem);
     overflow-y: auto;
     width: 100%;
-    border-radius: 8px;
-    border: 2px solid var(--mat-sys-outline);
+    border-radius: 0.5rem;
+    border: 0.125rem solid var(--mat-sys-outline);
     background: var(--mat-sys-background);
     height: max-content;
   }
@@ -35,25 +35,25 @@
     border-spacing: 0;
     background: var(--mat-sys-background);
     color: #fff;
-    border-radius: 8px;
+    border-radius: 0.5rem;
 
     .mat-mdc-header-row,
     .mat-header-row {
       position: sticky;
       top: 0;
       z-index: 2;
-      background: #23202a;
+      background: var(--mat-sys-surface-variant);
     }
 
     .mat-mdc-header-cell,
     .mat-header-cell {
-      background: #23202a;
+      background: var(--mat-sys-surface-variant);
       font-weight: 600;
     }
 
     .mat-mdc-row,
     .mat-row {
-      background: #18141a;
+      background: var(--mat-sys-surface);
     }
 
     .mat-mdc-cell,
@@ -62,7 +62,7 @@
     }
 
     .mat-column-actions {
-      width: 160px;
+      width: 10rem;
     }
 
     .mat-column-title,
@@ -87,21 +87,21 @@
 
     .mat-mdc-row,
     .mat-row {
-      background: #18141a;
+      background: var(--mat-sys-surface);
       transition: background 0.2s;
 
       &:hover {
-        background: #23202a;
+        background: var(--mat-sys-surface-variant);
       }
     }
 
     .status-badge {
-      padding: 4px 12px;
-      border-radius: 16px;
-      font-size: 12px;
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+      font-size: 0.75rem;
       font-weight: 500;
       display: inline-block;
-      min-width: 80px;
+      min-width: 5rem;
       text-align: center;
 
       &.draft {

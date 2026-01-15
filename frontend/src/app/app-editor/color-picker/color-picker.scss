@@ -6,17 +6,17 @@
 }
 
 .cp-wheel {
-  width: 180px;
-  height: 180px;
+  width: 11.25rem;
+  height: 11.25rem;
   border-radius: 50%;
-  border: 2px solid var(--mat-sys-outline);
+  border: 0.125rem solid var(--mat-sys-outline);
   cursor: crosshair;
 }
 
 .cp-lum {
-  width: 180px;
-  height: 16px;
-  border-radius: 2px;
-  border: 2px solid var(--mat-sys-outline);
+  width: 11.25rem;
+  height: 1rem;
+  border-radius: 0.125rem;
+  border: 0.125rem solid var(--mat-sys-outline);
   cursor: ew-resize;
 }

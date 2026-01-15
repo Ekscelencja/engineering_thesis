@@ -7,17 +7,17 @@
 }
 
 .feedback-message {
-    border: 1px solid var(--mat-sys-primary);
+    border: 0.0625rem solid var(--mat-sys-primary);
     padding: 1rem;
-    border-radius: .5rem;
+    border-radius: 0.5rem;
     margin-bottom: 1rem;
 }
 
 .status-badge {
-    padding: .125rem .5rem;
-    border-radius: .75rem;
-    font-size: .75rem;
-    margin-left: .5rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.75rem;
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
 }
 
 .status-badge.pending {
@@ -39,6 +39,6 @@ mat-icon.resolved {
 }
 
 .resolved-info {
-    color: #666;
+    color: var(--mat-sys-on-surface-variant);
     font-style: italic;
 }

@@ -2,9 +2,9 @@
   width: 100%;
   height: calc(100vh - 12.5rem) !important;
   display: block;
-  background: #dedede;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: var(--mat-sys-surface-container);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.08);
 }
 
 .status-title-wrapper {
@@ -12,7 +12,7 @@
   align-items: center;
   gap: 1rem;
   position: fixed;
-  top: .25rem;
+  top: 0.25rem;
   right: 1rem;
 
   .editor-project-name {
@@ -23,7 +23,7 @@
   }
 
   .project-status-dropdown {
-    width: 160px;
+    width: 10rem;
 
     ::ng-deep {
       .mat-mdc-form-field-subscript-wrapper {
@@ -36,15 +36,15 @@
 .editor-action-panel {
   position: fixed;
   top: 0;
-  right: -340px;
+  right: -21.25rem;
   z-index: 1000;
-  width: 340px;
+  width: 21.25rem;
   height: 100vh;
   display: flex;
   align-items: center;
   background: var(--mat-sys-surface-container-low);
-  border-left: 2px solid var(--mat-sys-primary);
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
+  border-left: 0.125rem solid var(--mat-sys-primary);
+  box-shadow: -0.125rem 0 0.5rem rgba(0, 0, 0, 0.08);
   display: flex;
   padding: 1.5rem 0;
   flex-direction: column;
@@ -74,8 +74,8 @@
     cursor: pointer;
 
     .nav-icon {
-      width: 24px;
-      height: 24px;
+      width: 1.5rem;
+      height: 1.5rem;
       fill: var(--mat-sys-primary) !important;
       opacity: 0.9;
       transform: rotateY(0deg);
@@ -100,7 +100,7 @@
     justify-content: space-between;
     padding: 0 1.5rem 1.5rem 1.5rem;
     box-sizing: border-box;
-    border-bottom: 2px solid var(--mat-sys-primary);
+    border-bottom: 0.125rem solid var(--mat-sys-primary);
 
     button {
       height: 2rem;
@@ -110,9 +110,9 @@
   .editor-action-metadata {
     padding: 1.5rem;
     box-sizing: border-box;
-    max-height: 330px;
+    max-height: 20.625rem;
     width: 100%;
-    border-bottom: 2px solid var(--mat-sys-primary);
+    border-bottom: 0.125rem solid var(--mat-sys-primary);
     color: var(--mat-sys-primary);
     overflow-y: auto;
 
@@ -122,7 +122,7 @@
 
     .room-metadata-summary {
       padding: 0.5rem 0;
-      border-bottom: 1px solid var(--mat-sys-outline);
+      border-bottom: 0.0625rem solid var(--mat-sys-outline);
 
       &.selected {
         background: var(--mat-sys-surface-container-high);
@@ -186,7 +186,7 @@
       align-items: center;
       line-height: 1.5rem;
       transition: background 0.2s;
-      border-bottom: 1px solid var(--mat-sys-primary);
+      border-bottom: 0.0625rem solid var(--mat-sys-primary);
       cursor: pointer;
 
       .mat-icon {
@@ -232,32 +232,32 @@
 
 
     .texture-tile {
-      border-radius: 6px;
+      border-radius: 0.375rem;
       padding: 1rem;
       cursor: pointer;
-      width: calc(50% - .25rem);
+      width: calc(50% - 0.25rem);
       text-align: center;
       transition: border 0.2s;
-      background: #23202a;
+      background: var(--mat-sys-surface-variant);
       box-sizing: border-box;
-      border: 1px solid var(--mat-sys-primary);
+      border: 0.0625rem solid var(--mat-sys-primary);
 
       &.selected {
         border-color: var(--mat-sys-on-surface);
-        background: #504c5a;
+        background: var(--mat-sys-surface-container-highest);
       }
 
       img {
-        width: 48px;
-        height: 48px;
+        width: 3rem;
+        height: 3rem;
         object-fit: cover;
-        border-radius: 4px;
+        border-radius: 0.25rem;
       }
 
       span {
         display: block;
         font-size: 0.75rem;
-        margin-top: 2px;
+        margin-top: 0.125rem;
         color: var(--mat-sys-on-surface);
       }
     }
@@ -281,11 +281,11 @@
       cursor: pointer;
       box-sizing: border-box;
       padding: 1rem;
-      border-radius: 8px;
-      background: #23202a;
+      border-radius: 0.5rem;
+      background: var(--mat-sys-surface-variant);
       width: calc(50% - 0.5rem);
       height: max-content;
-      border: 1px solid var(--mat-sys-primary);
+      border: 0.0625rem solid var(--mat-sys-primary);
 
       p {
         margin: 0.5rem 0 0 0;
@@ -302,16 +302,16 @@
 .archived-baner {
   display: flex;
   align-items: center;
-  gap: .5rem;
-  padding: .75rem 1rem;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
   font-weight: 500;
   position: fixed;
   top: 4rem;
   left: 1rem;
   width: calc(100% - 4rem);
-  border-top-left-radius: .5rem;
-  border-top-right-radius: .5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.1);
 
   mat-icon {
     font-size: 1.25rem;
@@ -321,21 +321,21 @@
 }
 
 .feedback-mode-banner {
-  background: #fff3cd;
-  color: #856404;
-  border-bottom-color: #ffeeba;
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+  border-bottom-color: var(--mat-sys-surface-container-high);
 }
 
 .view-only-banner {
-  background: #cce5ff;
-  color: #004085;
-  border-bottom-color: #b8daff;
+  background: var(--mat-sys-surface-container);
+  color: var(--mat-sys-primary);
+  border-bottom-color: var(--mat-sys-surface-container-high);
 }
 
 .archived-baner {
-  background: #e2e3e5;
-  color: #383d41;
-  border-bottom: 1px solid #d6d8db;
+  background: var(--mat-sys-surface-container);
+  color: var(--mat-sys-on-surface);
+  border-bottom: 0.0625rem solid var(--mat-sys-outline);
 }
 
 .furniture-panel.view-only {
@@ -344,7 +344,7 @@
 
   h4::after {
     content: ' (View Only)';
-    font-size: 12px;
-    color: #666;
+    font-size: 0.75rem;
+    color: var(--mat-sys-on-surface-variant);
   }
 }
