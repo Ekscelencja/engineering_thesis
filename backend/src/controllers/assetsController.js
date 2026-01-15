@@ -4,35 +4,26 @@ const fs = require('fs');
 const path = require('path');
 
 exports.getFurnitureAssets = (req, res) => {
-  const dir = path.join(__dirname, '../../../frontend/src/assets/3d_objects');
-  fs.readdir(dir, (err, folders) => {
+  const assetsDir = path.join(__dirname, '../../../frontend/src/assets/3d_glb_models');
+  
+  fs.readdir(assetsDir, (err, files) => {
     if (err) {
-      console.error('[API] Error reading furniture assets:', err);
+      console.error('Error reading furniture assets directory:', err);
       return res.status(500).json({ error: err.message });
     }
-    const assets = folders
-      .filter(f => fs.statSync(path.join(dir, f)).isDirectory())
-      .map(folder => {
-        const files = fs.readdirSync(path.join(dir, folder));
-        let meta = {};
-        const metaPath = path.join(dir, folder, 'meta.json');
-        if (fs.existsSync(metaPath)) {
-          try {
-            meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
-          } catch (e) {
-            console.warn(`Could not parse meta.json for ${folder}:`, e);
-          }
-        }
-        return {
-          name: meta.name || folder,
-          folder,
-          obj: files.find(f => f.endsWith('.obj')) || null,
-          mtl: files.find(f => f.endsWith('.mtl')) || null,
-          scale: meta.scale || 1,
-          tags: meta.tags || [],
-          previewImage: meta.previewImage || null
-        };
-      });
+    
+    const glbFiles = files.filter(f => f.endsWith('.glb'));
+    const assets = glbFiles.map(file => {
+      const nameWithoutExt = file.replace('.glb', '');
+      return {
+        _id: nameWithoutExt,
+        name: nameWithoutExt.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        folder: '3d_glb_models',
+        glb: file,
+        scale: 1
+      };
+    });
+    
     res.json(assets);
   });
 };

@@ -17,6 +17,7 @@ export interface PlacedFurniture {
   position: THREE.Vector3;
   rotation: number;
   mesh: THREE.Object3D;
+  scale: number;
 }
 
 @Injectable({ providedIn: 'root' })

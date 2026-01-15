@@ -17,8 +17,7 @@ import { FeedbackDialogComponent, FeedbackDialogData } from '../feedback/feedbac
 import { FeedbackViewDialogComponent } from '../feedback/feedback-view-dialog/feedback-view-dialog';
 import { NotificationService, Feedback } from '../services/api/notification.service';
 import * as THREE from 'three';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { StepperSelectionEvent } from '@angular/cdk/stepper';
 import { ColorPickerComponent } from './color-picker/color-picker';
 import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
@@ -111,14 +110,16 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private feedbackData: Feedback[] = [];
 
   private suppressStepperSelectionChange = false;
-  
+
   private roomMetadataSub?: Subscription;
   private selectedRoomIndexSub?: Subscription;
+
+  private gltfLoader = new GLTFLoader();
 
   public get roomMetadata() {
     return this.editorStateService.roomMetadata;
   }
-  
+
   public get selectedRoomMesh() {
     return this.editorStateService.selectedRoomMesh;
   }
@@ -152,8 +153,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     private projectService: ProjectService,
     public editorEventsService: EditorEventsService,
     private assetsService: AssetsService,
-    private dialog: MatDialog,  // Add this
-    private notificationService: NotificationService  // Add this
+    private dialog: MatDialog,
+    private notificationService: NotificationService
   ) { }
 
   ngOnInit() {
@@ -169,17 +170,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.threeRenderService.animate();
     this.editorEventsService.setCanvasRef(this.canvasRef);
 
-    // Pass feedback mode and view-only state to services
     this.editorStateService.feedbackMode = this.feedbackMode;
     this.editorEventsService.viewOnly = this.viewOnly;
     this.editorEventsService.feedbackMode = this.feedbackMode;
 
-    // Set up feedback element selection handler (only for feedback mode - client leaving feedback)
     if (this.feedbackMode) {
       this.editorEventsService.onFeedbackElementSelected = this.onElementSelectedForFeedback.bind(this);
     }
 
-    // ALWAYS set up feedback marker click handler (for both architect and client to view feedback)
     this.editorEventsService.onFeedbackMarkerClicked = this.onFeedbackMarkerClicked.bind(this);
 
     window.addEventListener('resize', () => this.threeRenderService.resize(this.canvasRef.nativeElement));
@@ -276,9 +274,10 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       wallAppearance: this.editorStateService.wallAppearance,
       floorAppearance: this.editorStateService.floorAppearance,
       furniture: this.editorStateService.placedFurnitures.map(f => ({
-        assetId: f.asset.folder,
+        assetId: f.asset._id,
         position: { x: f.position.x, y: f.position.y, z: f.position.z },
-        rotation: f.rotation
+        rotation: f.rotation,
+        scale: f.scale
       })),
       editorStep: this.editorStateService.editorStep
     };
@@ -455,26 +454,18 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       this.editorEventsService.furniturePlacementActive = false;
     }
 
-    const basePath = `assets/3d_objects/${asset.folder}/`;
-    if (asset.mtl) {
-      const mtlLoader = new MTLLoader();
-      mtlLoader.setPath(basePath);
-      mtlLoader.load(asset.mtl, (materials) => {
-        materials.preload();
-        const objLoader = new OBJLoader();
-        objLoader.setMaterials(materials);
-        objLoader.setPath(basePath);
-        objLoader.load(asset.obj, (object) => {
-          this.preparePlacementModel(object, asset);
-        });
-      });
-    } else {
-      const objLoader = new OBJLoader();
-      objLoader.setPath(basePath);
-      objLoader.load(asset.obj, (object) => {
+    const url = `assets/${asset.folder}/${asset.glb}`;
+    this.gltfLoader.load(
+      url,
+      (gltf) => {
+        const object = gltf.scene;
         this.preparePlacementModel(object, asset);
-      });
-    }
+      },
+      undefined,
+      (error) => {
+        console.error(`Error loading furniture ${asset.name}:`, error);
+      }
+    );
   }
 
   private preparePlacementModel(object: THREE.Object3D, asset: FurnitureAsset) {
@@ -482,20 +473,16 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
-    const targetSize = 1.2;
-    object.scale.setScalar(asset.scale || 1);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    object.position.sub(center);
-    const newBox = new THREE.Box3().setFromObject(object);
-    object.position.y -= newBox.min.y;
+    const targetSize = 1;
+    const scale = targetSize / maxDim;
+    object.scale.setScalar(scale);
 
     this.threeRenderService.scene.add(object);
     this.editorEventsService.enableFurniturePlacement(object, asset);
   }
 
   private hydratePlacedFurnitureFromProject(data: ProjectData): void {
-    const list = (data as any)?.furniture as { assetId: string; position: { x: number; y: number; z: number }; rotation: number }[] | undefined;
+    const list = (data as any)?.furniture as { assetId: string; position: { x: number; y: number; z: number }; rotation: number; scale?: number }[] | undefined;
     if (!list || list.length === 0) {
       this.editorStateService.placedFurnitures = [];
       return;
@@ -504,43 +491,35 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.editorStateService.placedFurnitures = [];
 
     for (const f of list) {
-      const asset = this.furnitureAssets.find(a => a.folder === f.assetId);
+      const asset = this.furnitureAssets.find(a => a._id === f.assetId);
       if (!asset) continue;
 
-      const basePath = `assets/3d_objects/${asset.folder}/`;
-      const addFurniture = (object: THREE.Object3D) => {
-        object.position.set(f.position.x, f.position.y, f.position.z);
-        object.rotation.y = f.rotation ?? 0;
-        object.scale.setScalar(asset.scale || 1);
-        this.threeRenderService.scene.add(object);
+      const url = `assets/${asset.folder}/${asset.glb}`;
+      this.gltfLoader.load(
+        url,
+        (gltf) => {
+          const object = gltf.scene;
+          object.scale.setScalar(f.scale ?? 1);
 
-        this.editorStateService.placedFurnitures.push({
-          asset,
-          position: object.position.clone(),
-          rotation: object.rotation.y,
-          mesh: object
-        });
-      };
+          object.position.set(f.position.x, f.position.y, f.position.z);
+          object.rotation.y = f.rotation ?? 0;
+          this.threeRenderService.scene.add(object);
 
-      if (asset.mtl) {
-        const mtlLoader = new MTLLoader();
-        mtlLoader.setPath(basePath);
-        mtlLoader.load(asset.mtl, (materials) => {
-          materials.preload();
-          const objLoader = new OBJLoader();
-          objLoader.setMaterials(materials);
-          objLoader.setPath(basePath);
-          objLoader.load(asset.obj, addFurniture);
-        });
-      } else {
-        const objLoader = new OBJLoader();
-        objLoader.setPath(basePath);
-        objLoader.load(asset.obj, addFurniture);
-      }
+          this.editorStateService.placedFurnitures.push({
+            asset,
+            position: object.position.clone(),
+            rotation: object.rotation.y,
+            mesh: object,
+            scale: f.scale ?? 1
+          });
+        },
+        undefined,
+        (error) => {
+          console.error(`Error loading furniture ${asset.name}:`, error);
+        }
+      );
     }
   }
-
-  // ========== FEEDBACK METHODS ==========
 
   loadFeedbackMarkers(): void {
     if (!this.projectId) return;

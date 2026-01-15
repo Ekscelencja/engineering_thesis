@@ -30,6 +30,7 @@ export class EditorEventsService {
   public placingFurnitureModel: THREE.Object3D | null = null;
   public placingFurnitureAsset: FurnitureAsset | null = null;
   private furnitureRotation: number = 0;
+  public placingFurnitureScale: number = 1;
 
   public viewOnly: boolean = false;
   public feedbackMode: boolean = false;
@@ -444,13 +445,24 @@ export class EditorEventsService {
     this.placingFurnitureModel = placingFurnitureModel;
     this.placingFurnitureAsset = placingFurnitureAsset;
     this.furnitureRotation = 0;
+    this.placingFurnitureScale = 1;
+    window.addEventListener('wheel', this.onFurniturePlacementWheel, { passive: false });
   }
 
   disableFurniturePlacement() {
     this.furniturePlacementActive = false;
     this.placingFurnitureModel = null;
     this.placingFurnitureAsset = null;
+    window.removeEventListener('wheel', this.onFurniturePlacementWheel);
   }
+
+  onFurniturePlacementWheel = (event: WheelEvent) => {
+    if (!this.furniturePlacementActive || !this.placingFurnitureModel) return;
+    event.preventDefault();
+    const delta = event.deltaY < 0 ? 1.05 : 0.95;
+    this.placingFurnitureScale = Math.max(0.1, Math.min(5, this.placingFurnitureScale * delta));
+    this.placingFurnitureModel.scale.setScalar(this.placingFurnitureScale);
+  };
 
   onCanvasMouseMove = (event: MouseEvent) => {
     if (this.furniturePlacementActive && this.placingFurnitureModel) {
@@ -571,7 +583,8 @@ export class EditorEventsService {
         asset: this.placingFurnitureAsset,
         position: this.placingFurnitureModel.position.clone(),
         rotation: this.placingFurnitureModel.rotation.y,
-        mesh: this.placingFurnitureModel
+        mesh: this.placingFurnitureModel,
+        scale: this.placingFurnitureScale
       });
       this.disableFurniturePlacement();
       return;

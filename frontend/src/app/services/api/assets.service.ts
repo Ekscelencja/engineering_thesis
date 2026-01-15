@@ -6,8 +6,7 @@ export interface FurnitureAsset {
   _id: string;
   name: string;
   folder: string;
-  obj: string;
-  mtl?: string;
+  glb: string;
   scale: number;
 }
 
