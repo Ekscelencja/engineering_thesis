@@ -10,6 +10,7 @@ import { EditorComponent } from '../app-editor/editor';
 import { ProjectService, ProjectData } from '../services/api/project.service';
 import { SessionService } from '../services/api/session.service';
 import { IconsService } from '../services/icons.service';
+import { ActivatedRoute, Router } from '@angular/router';
 
 
 @Component({
@@ -41,6 +42,7 @@ export class ProjectsPanelComponent implements OnInit {
   newProjectTitle: string | null = null;
   newProjectClientId: string | null = null;
   userType: string | null = null;
+  feedbackMode: boolean = false;
 
   @ViewChild('editorRef') editorRef?: EditorComponent;
   @ViewChild('confirmDialog') confirmDialogTpl!: TemplateRef<any>;
@@ -48,10 +50,19 @@ export class ProjectsPanelComponent implements OnInit {
   public confirmDialogRef: MatDialogRef<any> | null = null;
   confirmDialogData: { title: string; question: string; confirmText: string; color: string; onConfirm: () => void } | null = null;
 
+  statusLabels: Record<string, string> = {
+    draft: 'Draft',
+    in_review: 'In Review',
+    approved: 'Approved',
+    archived: 'Archived'
+  };
+
   constructor(
     private projectService: ProjectService,
     public session: SessionService,
-    private dialog: MatDialog
+    private dialog: MatDialog,
+    private route: ActivatedRoute,
+    private router: Router
   ) { }
 
   ngOnInit() {
@@ -59,13 +70,23 @@ export class ProjectsPanelComponent implements OnInit {
     this.userType = this.session.user()?.role || null;
     this.fetchProjects();
     this.setDisplayedColumns();
+
+    this.route.queryParams.subscribe(params => {
+      if (params['create'] === 'true') {
+        this.openCreateProjectDialog();
+      }
+      if (params['edit']) {
+        this.editProjectFromId(params['edit']);
+      }
+      this.router.navigate([], { queryParams: {} });
+    });
   }
 
   setDisplayedColumns() {
     if (this.session.user()?.role === 'architect') {
-      this.displayedColumns = ['title', 'id', 'client', 'actions'];
+      this.displayedColumns = ['title', 'id', 'client', 'status', 'actions'];
     } else {
-      this.displayedColumns = ['title', 'id', 'actions'];
+      this.displayedColumns = ['title', 'id', 'status', 'actions'];
     }
   }
 
@@ -73,12 +94,27 @@ export class ProjectsPanelComponent implements OnInit {
     this.loading.set(true);
     this.projectService.getProjects().subscribe({
       next: (projects) => {
-        // Add clientName for table if available
-        const projectsWithClient = projects.map((p: any) => ({
+        const user = this.session.user();
+        let projectsWithClient = projects.map((p: any) => ({
           ...p,
           clientName: p.client?.name || p.clientName || ''
         }));
-        console.log('Fetched projects', projectsWithClient);
+
+
+        // Filter projects for current architect or client
+        if (user) {
+          const userId = user.id;
+          if (user.role === 'architect') {
+            projectsWithClient = projectsWithClient.filter(
+              (p: any) => p.architect?._id === userId
+            );
+          } else if (user.role === 'client') {
+            projectsWithClient = projectsWithClient.filter(
+              (p: any) => p.client?._id === userId
+            );
+          }
+        }
+
         this.projects.set(projectsWithClient);
         this.loading.set(false);
       },
@@ -87,7 +123,6 @@ export class ProjectsPanelComponent implements OnInit {
         this.loading.set(false);
       }
     });
-
   }
 
   openCreateProjectDialog() {
@@ -107,6 +142,11 @@ export class ProjectsPanelComponent implements OnInit {
   // (create/cancel logic now handled in dialog)
   editProject(project: ProjectData) {
     this.selectedProjectId = project._id || null;
+    this.showEditorOnly.set(true);
+  }
+
+  editProjectFromId(projectId: string) {
+    this.selectedProjectId = projectId;
     this.showEditorOnly.set(true);
   }
 
@@ -170,13 +210,27 @@ export class ProjectsPanelComponent implements OnInit {
     });
   }
 
+  // Update viewProject method
   viewProject(project: ProjectData) {
-    this.viewProject(project);
-    
+    this.selectedProjectId = project._id || null;
+    this.feedbackMode = false;
+    this.showEditorOnly.set(true);
   }
 
+  // Update giveFeedback method
   giveFeedback(project: ProjectData) {
-    // Client: Logic to give feedback on a project
-    console.log('Feedback for project', project);
+    this.selectedProjectId = project._id || null;
+    this.feedbackMode = true;
+    this.showEditorOnly.set(true);
+  }
+
+  // Add method to close editor and reset state
+  closeEditor() {
+    this.showEditorOnly.set(false);
+    this.feedbackMode = false;
+    this.selectedProjectId = null;
+    this.newProjectTitle = null;
+    this.newProjectClientId = null;
+    this.fetchProjects();
   }
 }

@@ -1,3 +1,84 @@
 .assets-panel {
-  padding: 2rem;
+  padding: 4rem 1rem 1rem;
+  padding-top: 4rem;
+  height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.asset-type-selector {
+  width: 12.5rem;
+  margin-bottom: 1.5rem;
+  position: fixed;
+  top: 0.25rem;
+  right: 1rem;
+}
+
+.assets-section-wrapper {
+  height: calc(100vh - 5rem);
+  width: 100%;
+  overflow: hidden;
+  overflow-y: auto;
+}
+
+.assets-section {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 2px solid var(--mat-sys-primary);
+  padding-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.assets-section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--mat-sys-on-surface);
+}
+
+.assets-section-preview-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.furniture-preview,
+.texture-preview {
+  border-radius: 0.375rem;
+  padding: 1rem;
+  cursor: pointer;
+  background: var(--mat-sys-surface-variant);
+  box-sizing: border-box;
+  border: 0.0625rem solid var(--mat-sys-primary);
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: max-content;
+  width: max-content;
+  gap: 1rem;
+}
+
+.furniture-preview.selected,
+.texture-preview.selected {
+  border-color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface-container-highest);
+}
+
+.texture-preview img {
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+  border-radius: 0.25rem;
+}
+
+.texture-name {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.125rem;
+  color: var(--mat-sys-on-surface);
 }

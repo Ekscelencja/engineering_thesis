@@ -7,7 +7,7 @@ export const routes: Routes = [
   },
   {
     path: 'dashboard',
-    loadComponent: () => import('./dashboard-panel/dashboard-panel').then(m => m.DashboardPanel)
+    loadComponent: () => import('./dashboard-panel/dashboard-panel').then(m => m.DashboardPanelComponent)
   },
   {
     path: 'projects',

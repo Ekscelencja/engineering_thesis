@@ -3,9 +3,19 @@ const router = express.Router();
 const notificationController = require('../controllers/notificationController');
 const auth = require('../middleware/auth');
 
-// List notifications for logged-in user
-router.get('/', auth, notificationController.listNotifications);
-// Mark notification as read
-router.put('/:id/read', auth, notificationController.markAsRead);
+// Create feedback
+router.post('/feedback', auth, notificationController.createFeedback);
+
+// Get feedback for a specific project
+router.get('/feedback/project/:projectId', auth, notificationController.getFeedbackByProject);
+
+// Get all feedback for the current user
+router.get('/feedback/me', auth, notificationController.getMyFeedback);
+
+// Mark feedback as resolved
+router.patch('/feedback/:id/resolve', auth, notificationController.resolveFeedback);
+
+// Delete feedback
+router.delete('/feedback/:id', auth, notificationController.deleteFeedback);
 
 module.exports = router;

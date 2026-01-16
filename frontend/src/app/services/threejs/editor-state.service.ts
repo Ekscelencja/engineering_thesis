@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { WallFeature, WallSide } from '../../models/room-feature.model';
 import { FurnitureAsset } from '../api/assets.service';
+import { Subject } from 'rxjs';
 import * as THREE from 'three';
 
 export interface RoomMetadata {
@@ -8,7 +9,7 @@ export interface RoomMetadata {
   type: string;
   area: number;
   color: number;
-  wallFeatures?: WallFeature[][]; // Array of features per wall
+  wallFeatures?: WallFeature[][];
 }
 
 export interface PlacedFurniture {
@@ -16,12 +17,17 @@ export interface PlacedFurniture {
   position: THREE.Vector3;
   rotation: number;
   mesh: THREE.Object3D;
+  scale: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class EditorStateService {
   // Step-based workflow: 1=Rooms, 2=Walls/Features, 3=Furnishing
   public editorStep: 1 | 2 | 3 = 1;
+
+  //feedback state
+  public feedbackMode: boolean = false;
+  public feedbackMarkers: THREE.Mesh[] = [];
 
   // Drawing state aa
   public isDrawing = false;
@@ -35,14 +41,28 @@ export class EditorStateService {
   public vertexHandles: THREE.Mesh[] = [];
   public editingRoomIndex: number | null = null;
   public draggingHandleIndex: number | null = null;
+  public roomMetadataChanged$: Subject<void> = new Subject<void>();
+  public emitRoomMetadataChanged() {
+    this.roomMetadataChanged$.next();
+  }
 
   // Selection state
-  public selectedRoomMesh: THREE.Mesh | null = null;
+  private _selectedRoomIndex: number = -1;
+  public selectedRoomIndexChanged$ = new Subject<number>();
+  set selectedRoomIndex(idx: number) {
+    this._selectedRoomIndex = idx;
+    this.selectedRoomIndexChanged$.next(idx);
+  }
+  get selectedRoomIndex(): number {
+    return this._selectedRoomIndex;
+  }
+  get selectedRoomMesh(): THREE.Mesh | null {
+    return (this._selectedRoomIndex >= 0 && this.roomMeshes[this._selectedRoomIndex])
+      ? this.roomMeshes[this._selectedRoomIndex]
+      : null;
+  }
   public selectedWall: THREE.Mesh | null = null;
   public selectedWallSide: WallSide | null = null;
-  public get selectedRoomIndex(): number {
-    return this.selectedRoomMesh ? this.roomMeshes.indexOf(this.selectedRoomMesh) : -1;
-  }
   public selectedFurnitureIndex: number | null = null;
 
   // Control state

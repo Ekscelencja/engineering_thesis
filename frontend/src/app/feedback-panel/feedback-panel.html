@@ -1,4 +1,59 @@
 <div class="feedback-panel">
-  <h2>Feedback</h2>
-  <!-- Feedback form/UI will go here -->
+  <div *ngIf="loading()" class="loading">Loading feedback...</div>
+
+  <div *ngIf="!loading() && feedbacks.length === 0" class="empty">
+    No feedback yet.
+  </div>
+
+  <table mat-table [dataSource]="feedbacks" *ngIf="!loading() && feedbacks.length > 0" class="feedback-table">
+    <ng-container matColumnDef="project">
+      <th mat-header-cell *matHeaderCellDef>Project</th>
+      <td mat-cell *matCellDef="let feedback">{{ getProjectTitle(feedback) }}</td>
+    </ng-container>
+    
+    <ng-container matColumnDef="author">
+      <th mat-header-cell *matHeaderCellDef>Author</th>
+      <td mat-cell *matCellDef="let feedback">{{ feedback.author.name }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="elementType">
+      <th mat-header-cell *matHeaderCellDef>Element</th>
+      <td mat-cell *matCellDef="let feedback">{{ feedback.elementType | titlecase }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="message">
+      <th mat-header-cell *matHeaderCellDef>Message</th>
+      <td mat-cell *matCellDef="let feedback" class="message-cell">{{ feedback.message }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="status">
+      <th mat-header-cell *matHeaderCellDef>Status</th>
+      <td mat-cell *matCellDef="let feedback">
+        <span [class]="'status-badge ' + feedback.status">
+          {{ feedback.status | titlecase }}
+        </span>
+      </td>
+    </ng-container>
+
+    <ng-container matColumnDef="createdAt">
+      <th mat-header-cell *matHeaderCellDef>Created</th>
+      <td mat-cell *matCellDef="let feedback">{{ feedback.createdAt | date:'short' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef>Actions</th>
+      <td mat-cell *matCellDef="let feedback">
+        <button mat-icon-button *ngIf="userType === 'architect' && feedback.status === 'pending'"
+          (click)="resolveFeedback(feedback)" matTooltip="Mark as Resolved" class="action-button">
+          <mat-icon svgIcon="check" aria-hidden="true" class="action-icon"></mat-icon>
+        </button>
+        <button mat-icon-button color="warn" (click)="deleteFeedback(feedback)"matTooltip="Delete" class="action-button">
+          <mat-icon svgIcon="delete" aria-hidden="true" class="action-icon"></mat-icon>
+        </button>
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+  </table>
 </div>

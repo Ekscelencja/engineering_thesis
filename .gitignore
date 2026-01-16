@@ -28,10 +28,6 @@ Thumbs.db
 /copilot_history/*.tmp
 /copilot_history/*.bak
 
-# 3D assets
-/frontend/src/assets/3d_objects
-/frontend/src/assets/textures
-
 # IDE files
 .vscode/
 *.code-workspace

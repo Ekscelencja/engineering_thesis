@@ -1,40 +1,59 @@
 <canvas #canvas class="three-canvas"></canvas>
+
+<div class="status-title-wrapper" [class.no-edit]="!canEdit">
+	<h1 class="editor-project-name">{{ projectTitle }}</h1>
+	<mat-form-field appearance="fill" class="project-status-dropdown" *ngIf="canEdit">
+		<mat-label>Project Status</mat-label>
+		<mat-select [(ngModel)]="projectStatus" (selectionChange)="onProjectStatusChange($event.value)" [disabled]="projectStatus === 'archived'">
+			<mat-option value="draft">Draft</mat-option>
+			<mat-option value="in_review">In Review</mat-option>
+			<mat-option value="approved">Approved</mat-option>
+			<mat-option value="archived">Archived</mat-option>
+		</mat-select>
+	</mat-form-field>
+</div>
+
 <!-- Material Stepper UI -->
-<mat-horizontal-stepper
-  *ngIf="editorStep"
-  #stepper
-  [linear]="true"
-  (selectionChange)="onStepperSelectionChange($event)">
+<mat-horizontal-stepper *ngIf="editorStep" #stepper [linear]="true"
+	(selectionChange)="onStepperSelectionChange($event)">
 
-  <mat-step
-    [completed]="step1Completed"
-    [editable]="step1Completed"
-    [optional]="false">
-    <ng-template matStepLabel>Draw Rooms</ng-template>
-    <div></div>
-    <button mat-button (click)="onNextFromStep1()">Next</button>
-  </mat-step>
+	<mat-step [completed]="step1Completed" [editable]="step1Completed" [optional]="false">
+		<ng-template matStepLabel>Draw Rooms</ng-template>
+		<div></div>
+		<button mat-button *ngIf="canEdit && projectStatus !== 'archived'" (click)="onNextFromStep1()">Next</button>
+	</mat-step>
 
-  <mat-step
-    [completed]="step2Completed"
-    [editable]="step2Completed"
-    [optional]="false">
-    <ng-template matStepLabel>Walls & Features</ng-template>
-    <div></div>
-    <button mat-button (click)="onBackToStep1()">Back</button>
-    <button mat-button (click)="onNextFromStep2()">Next</button>
-  </mat-step>
+	<mat-step [completed]="step2Completed" [editable]="step2Completed" [optional]="false">
+		<ng-template matStepLabel>Walls & Features</ng-template>
+		<div></div>
+		<button mat-button *ngIf="canEdit && projectStatus !== 'archived'" (click)="onBackToStep1()">Back</button>
+		<button mat-button *ngIf="canEdit && projectStatus !== 'archived'" (click)="onNextFromStep2()">Next</button>
+	</mat-step>
 
-  <mat-step [optional]="false">
-    <ng-template matStepLabel>Furnishing</ng-template>
-    <div></div>
-    <button mat-button (click)="onBackToStep2()">Back</button>
-  </mat-step>
+	<mat-step [optional]="false">
+		<ng-template matStepLabel>Furnishing</ng-template>
+		<div></div>
+		<button mat-button *ngIf="canEdit && projectStatus !== 'archived'" (click)="onBackToStep2()">Back</button>
+	</mat-step>
 
 </mat-horizontal-stepper>
 
-<!-- Right-side expandable panel for steps 2 & 3 -->
-<div class="editor-action-panel" [class.expanded]="actionPanelExpanded">
+<div class="feedback-mode-banner" *ngIf="feedbackMode">
+	<mat-icon svgIcon="feedback" aria-hidden="true" class="action-icon"></mat-icon>
+	<span>Feedback Mode: Click on any element (room, wall, or furniture) to leave feedback</span>
+</div>
+
+<div class="view-only-banner" *ngIf="viewOnly && !feedbackMode">
+	<mat-icon svgIcon="view" aria-hidden="true" class="action-icon"></mat-icon>
+	<span>View Only Mode: You can view but not edit this project</span>
+</div>
+
+<div class="archived-baner" *ngIf="projectStatus === 'archived'">
+	<mat-icon svgIcon="archive" aria-hidden="true" class="action-icon"></mat-icon>
+	<span>This project is archived and cannot be edited</span>
+</div>
+
+<div class="editor-action-panel" [class.expanded]="actionPanelExpanded" *ngIf="canEdit && projectStatus !== 'archived'">
 	<button class="expand-collapse-button" [class.expanded]="actionPanelExpanded"
 		(click)="actionPanelExpanded = !actionPanelExpanded">
 		<mat-icon svgIcon="chevron" class="nav-icon" aria-hidden="true"></mat-icon>
@@ -56,16 +75,24 @@
 		<div *ngFor="let room of roomMetadata; let i = index" class="room-metadata-summary"
 			[class.selected]="i === selectedRoomIndex">
 			<p class="room-name" [style.color]="room.color | numberToColor">{{ room.name || 'Room ' + (i+1) }}</p>
-			<p class="room-type">{{ room.type || 'Type: N/A' }}</p>
+			<ng-container *ngIf="editorStep === 1 && canEdit; else typeText">
+				<mat-form-field appearance="fill" class="room-type-dropdown">
+					<mat-label>Room Type</mat-label>
+					<mat-select [(ngModel)]="room.type" (selectionChange)="onRoomTypeChange(i, room.type)">
+						<mat-option *ngFor="let rt of roomTypes" [value]="rt.key">{{ rt.label }}</mat-option>
+					</mat-select>
+				</mat-form-field>
+			</ng-container>
+			<ng-template #typeText>
+				<p class="room-type">{{ getRoomTypeLabel(room.type) }}</p>
+			</ng-template>
 			<p class="room-area">Area: {{ room.area | number:'1.2-2' }} m²</p>
 		</div>
 	</div>
 
-	<!-- Step 2: Walls & Features -->
 	<ng-container *ngIf="editorStep === 2">
 		<table mat-table [dataSource]="wallFeatureRows" multiTemplateDataRows class="expandable-table">
 
-			<!-- Label Column -->
 			<ng-container matColumnDef="label">
 				<td mat-cell *matCellDef="let row" (click)="row.expanded = !row.expanded">
 					<mat-icon>{{ row.expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
@@ -73,12 +100,10 @@
 				</td>
 			</ng-container>
 
-			<!-- Expanded Content Column -->
 			<ng-container matColumnDef="expandedDetail">
 				<td mat-cell *matCellDef="let row" [attr.colspan]="1">
 					<div class="expandable-content" [class.expanded]="row.expanded">
 						<ng-container *ngIf="row.expanded">
-							<!-- Wall Features -->
 							<ng-container *ngIf="row.type === 'features'">
 								<button mat-flat-button color="primary" (click)="startPlacingFeature('window')"
 									[disabled]="editorStateService.placingFeatureType !== null">
@@ -96,57 +121,55 @@
 								</span>
 							</ng-container>
 
-							<!-- Wall Color -->
 							<ng-container *ngIf="row.type === 'wcolor'">
 								<label>Wall Color:</label>
 								<app-color-picker [value]="wallColor" (valueChange)="onWallColorPicked($event)">
 								</app-color-picker>
 							</ng-container>
 
-							<!-- Wall Texture -->
+							<!-- Wall Texture Picker -->
 							<ng-container *ngIf="row.type === 'wtexture'">
-								<label>Wall Texture:</label>
-								<select [(ngModel)]="wallTexture" (change)="applyWallTexture()">
-									<option value="">None</option>
-									<option value="wallpaper_1">Wallpaper 1</option>
-									<option value="wallpaper_2">Wallpaper 2</option>
-								</select>
+							  <label>Wall Texture:</label>
+							  <div class="texture-tile-list">
+							    <div *ngFor="let tex of wallTextures"
+							         class="texture-tile"
+							         [class.selected]="wallTexture === tex.name"
+							         (click)="selectWallTexture(tex)">
+							      <img [src]="tex.url" [alt]="tex.name" />
+							      <span>{{ tex.name }}</span>
+							    </div>
+							  </div>
 							</ng-container>
 
-							<!-- Floor Color -->
 							<ng-container *ngIf="row.type === 'fcolor'">
 								<label>Floor Color:</label>
 								<app-color-picker [value]="floorColor" (valueChange)="onFloorColorPicked($event)">
 								</app-color-picker>
 							</ng-container>
 
-							<!-- Floor Texture -->
+							<!-- Floor Texture Picker -->
 							<ng-container *ngIf="row.type === 'ftexture'">
-								<label>Floor Texture:</label>
-								<select [(ngModel)]="floorTexture" (change)="applyFloorTexture()">
-									<option value="">None</option>
-									<option value="floor_1">Floor 1</option>
-									<option value="floor_2">Floor 2</option>
-								</select>
+							  <label>Floor Texture:</label>
+							  <div class="texture-tile-list">
+							    <div *ngFor="let tex of floorTextures"
+							         class="texture-tile"
+							         [class.selected]="floorTexture === tex.name"
+							         (click)="selectFloorTexture(tex)">
+							      <img [src]="tex.url" [alt]="tex.name" />
+							      <span>{{ tex.name }}</span>
+							    </div>
+							  </div>
 							</ng-container>
 						</ng-container>
 					</div>
 				</td>
 			</ng-container>
-
-			<!-- Remove header row entirely -->
-			<!-- No mat-header-row / matHeaderRowDef -->
-
-			<!-- Main label rows -->
 			<tr mat-row *matRowDef="let row; columns: ['label'];" [class.expanded-header-row]="row.expanded"></tr>
-
-			<!-- Detail rows: render ONLY when row.expanded -->
 			<tr mat-row *matRowDef="let row; columns: ['expandedDetail'];" [class.expanded-row]="row.expanded"
 				[style.display]="row.expanded ? '' : 'none'"></tr>
 		</table>
 	</ng-container>
 
-	<!-- Step 3: Furnishing -->
 	<ng-container *ngIf="editorStep === 3">
 		<div class="furniture-assets-gallery">
 			<div *ngFor="let asset of furnitureAssets" class="furniture-asset-item"

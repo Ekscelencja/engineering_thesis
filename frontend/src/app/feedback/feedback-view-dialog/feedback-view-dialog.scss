@@ -1,0 +1,44 @@
+.feedback-meta {
+    margin-bottom: 1rem;
+}
+
+.feedback-meta p {
+    margin: 0.25rem 0;
+}
+
+.feedback-message {
+    border: 0.0625rem solid var(--mat-sys-primary);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.status-badge {
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.75rem;
+    font-size: 0.75rem;
+    margin-left: 0.5rem;
+}
+
+.status-badge.pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-badge.resolved {
+    background: #d4edda;
+    color: #155724;
+}
+
+mat-icon.pending {
+    color: #ff9800;
+}
+
+mat-icon.resolved {
+    color: #4caf50;
+}
+
+.resolved-info {
+    color: var(--mat-sys-on-surface-variant);
+    font-style: italic;
+}

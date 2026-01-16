@@ -1,0 +1,16 @@
+<h2 mat-dialog-title>Leave Feedback</h2>
+<mat-dialog-content>
+    <p class="element-info">
+        <strong>Element:</strong> {{ data.elementType | titlecase }}
+    </p>
+    <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Your feedback</mat-label>
+        <textarea matInput [(ngModel)]="message" placeholder="Describe what changes you'd like..." rows="4"></textarea>
+    </mat-form-field>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+    <button mat-button (click)="onCancel()">Cancel</button>
+    <button mat-raised-button color="primary" [disabled]="!message.trim()" (click)="onSubmit()">
+        Submit Feedback
+    </button>
+</mat-dialog-actions>

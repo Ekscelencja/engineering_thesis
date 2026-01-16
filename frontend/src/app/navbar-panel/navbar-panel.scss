@@ -1,7 +1,7 @@
 .toggle-btn {
     display: block;
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
     position: fixed;
     top: 1rem;
     left: 1rem;
@@ -13,20 +13,20 @@
     span {
         display: block;
         width: 100%;
-        height: 2px;
-        border-radius: 2px;
+        height: 0.125rem;
+        border-radius: 0.125rem;
         transition: all 0.2s;
         background-color: var(--mat-sys-primary);
         opacity: 0.9;
-        margin-top: calc(33% - 2px);
-        top: calc((33% - 2px) / -2);
+        margin-top: calc(33% - 0.125rem);
+        top: calc((33% - 0.125rem) / -2);
         position: relative;
     }
 
     &.toggled {
         span {
             &:nth-child(1) {
-                top: calc(50% - 33% - 2px);
+                top: calc(50% - 33% - 0.125rem);
                 transform: rotate(45deg);
             }
 
@@ -35,7 +35,7 @@
             }
 
             &:nth-child(3) {
-                top: calc(-50% + 2px);
+                top: calc(-50% + 0.125rem);
                 transform: rotate(-45deg);
             }
         }
@@ -44,8 +44,8 @@
 
 .mode-toggle-btn {
     display: block;
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
     position: fixed;
     top: 1rem;
     left: 4.5rem;
@@ -56,8 +56,8 @@
     padding: 0;
 
     .nav-icon {
-        width: 24px;
-        height: 24px;
+        width: 1.5rem;
+        height: 1.5rem;
         fill: var(--mat-sys-primary) !important;
         opacity: 0.9;
     }
@@ -80,19 +80,19 @@
     top: 0;
     left: 0;
     height: 100vh;
-    width: 220px;
+    width: 13.75rem;
     background: var(--mat-sys-surface-container-low);
     display: flex;
     flex-direction: column;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0.125rem 0 0.5rem rgba(0, 0, 0, 0.08);
     z-index: 99;
     transition: width 0.2s, left 0.2s;
-    border-right: 2px solid var(--mat-sys-primary);
+    border-right: 0.125rem solid var(--mat-sys-primary);
 
     &.hidden {
         width: 0;
         overflow: hidden;
-        left: -220px;
+        left: -13.75rem;
     }
 
     .nav-links {

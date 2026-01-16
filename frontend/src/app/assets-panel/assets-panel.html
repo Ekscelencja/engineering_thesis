@@ -1,4 +1,40 @@
 <div class="assets-panel">
-  <h2>Assets</h2>
-  <!-- 3D assets management UI will go here -->
+  <mat-form-field class="asset-type-selector">
+    <mat-label>Type</mat-label>
+    <mat-select [(ngModel)]="selectedType" (selectionChange)="selectType($event)">
+      <mat-option value="">All</mat-option>
+      <mat-option value="furniture">Furniture</mat-option>
+      <mat-option value="wall">Wall Texture</mat-option>
+      <mat-option value="floor">Floor Texture</mat-option>
+    </mat-select>
+  </mat-form-field>
+  <div class="assets-section-wrapper">
+    <div class="assets-section" *ngIf="selectedType === '' || selectedType === 'furniture'">
+      <h2 class="assets-section-title">Furniture</h2>
+      <div class="assets-section-preview-wrapper">
+        <div *ngFor="let asset of furnitureAssets" class="preview-tile furniture-preview">
+          <app-furniture-preview [asset]="asset"></app-furniture-preview>
+          <div class="furniture-name">{{asset.name}} </div>
+        </div>
+      </div>
+    </div>
+    <div class="assets-section" *ngIf="selectedType === '' || selectedType === 'wall'">
+      <h2 class="assets-section-title">Wall Texture</h2>
+      <div class="assets-section-preview-wrapper">
+        <div *ngFor="let tex of wallTextures" class="preview-tile texture-preview">
+          <img [src]="tex.url" [alt]="tex.name" />
+          <div class="texture-name">{{tex.name}}</div>
+        </div>
+      </div>
+    </div>
+    <div class="assets-section" *ngIf="selectedType === '' || selectedType === 'floor'">
+      <h2 class="assets-section-title">Floor Texture</h2>
+      <div class="assets-section-preview-wrapper">
+        <div *ngFor="let tex of floorTextures" class="preview-tile texture-preview">
+          <img [src]="tex.url" [alt]="tex.name" />
+          <div class="texture-name">{{tex.name}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>

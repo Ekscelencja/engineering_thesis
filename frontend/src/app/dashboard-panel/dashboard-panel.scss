@@ -1,1 +1,220 @@
-.dashboard-container { max-width: 800px; margin: auto; padding: 2rem; }
+.dashboard-panel {
+    padding: 2rem 1rem;
+    padding-top: 4rem;
+    height: 100vh;
+    width: 100vw;
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+
+    .dashboard-shortcuts {
+        display: flex;
+        gap: 2rem;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        margin-top: 1rem;
+    }
+
+    .dashboard-stats {
+        display: flex;
+        gap: 2rem;
+        margin: 2rem 0;
+
+        .stat-card {
+            background: var(--mat-sys-surface-variant);
+            border: 0.0625rem solid var(--mat-sys-primary);
+            border-radius: 0.5rem;
+            padding: 1rem 2rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+            min-width: 11.25rem;
+            text-align: center;
+            flex: 1 1 33.3333%;
+            max-width: 33.3333%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+
+            .stat-card-count {
+                font-size: 5.5rem;
+                line-height: 5.5rem;
+                margin-top: 0.5rem;
+                color: var(--mat-sys-primary);
+            }
+        }
+    }
+
+    .dashboard-section {
+        margin-bottom: 2rem;
+        background: var(--mat-sys-surface-variant);
+        border: 0.0625rem solid var(--mat-sys-primary);
+        border-radius: 0.5rem;
+        padding: 1rem 2rem;
+        cursor: default;
+
+        h2 {
+            margin: 0 0 1rem;
+            text-align: center;
+        }
+
+        .dashboard-section-row {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.25rem 0;
+            border-bottom: 0.0625rem solid var(--mat-sys-outline);
+
+            &:last-child {
+                border-bottom: none;
+            }
+
+            span {
+                font-size: 1rem;
+                border-right: 0.0625rem solid var(--mat-sys-outline);
+                padding-right: 0.25rem;
+
+                &:last-of-type {
+                    border-right: none;
+                    padding-right: 0;
+                }
+
+                &:nth-of-type(3) {
+                    border-left: 0.0625rem solid var(--mat-sys-outline);
+                    padding-left: 0.25rem;
+                }
+            }
+        }
+    }
+
+    .recent-feedback {
+        .feedback-project {
+            width: 12.5rem;
+            min-width: 12.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .feedback-status {
+            display: inline-block;
+            min-width: 4.375rem;
+            text-align: center;
+            border-radius: 0.75rem;
+            padding: 0.125rem 0.625rem !important;
+            font-size: 0.95em !important;
+
+            &.pending {
+                background: #fff3cd;
+                color: #856404;
+            }
+
+            &.resolved {
+                background: #d4edda;
+                color: #155724;
+            }
+
+            &.rejected {
+                background: #f8d7da;
+                color: #721c24;
+            }
+        }
+
+        .feedback-user {
+            max-width: 7.5rem;
+            min-width: 7.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: center;
+        }
+
+        .feedback-date {
+            max-width: 9.375rem;
+            min-width: 9.375rem;
+            text-align: center;
+        }
+
+        .feedback-message {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+    }
+
+    .recent-projects {
+        .project-row {
+            position: relative;
+        }
+
+        .project-title {
+            width: 12.5rem;
+            min-width: 12.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .project-status {
+            display: inline-block;
+            min-width: 5rem;
+            text-align: center;
+            border-radius: 0.75rem;
+            padding: 0.125rem 0.625rem !important;
+            font-size: 0.95em !important;
+
+            &.draft {
+                background: #e3f2fd;
+                color: #1565c0;
+            }
+
+            &.in_review {
+                background: #fff3cd;
+                color: #856404;
+            }
+
+            &.approved {
+                background: #d4edda;
+                color: #155724;
+            }
+
+            &.archived {
+                background: #eeeeee;
+                color: #616161;
+            }
+        }
+
+        .project-updated {
+            width: 15.625rem;
+            min-width: 15.625rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .project-architect-name,
+        .project-client-name {
+            width: 12.5rem;
+            min-width: 12.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .action-button {
+            position: absolute;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+
+            &:hover {
+                .mat-icon {
+                    fill: var(--mat-sys-primary);
+                }
+            }
+        }
+    }
+}

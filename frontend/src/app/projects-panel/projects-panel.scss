@@ -16,28 +16,114 @@
     position: fixed;
     top: 1rem;
     right: 1rem;
-    height: 32px;
+    height: 2rem;
+  }
+
+  .projects-table-container {
+    max-height: calc(100vh - 8rem);
+    overflow-y: auto;
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 0.125rem solid var(--mat-sys-outline);
+    background: var(--mat-sys-background);
+    height: max-content;
   }
 
   .projects-table {
     width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
     background: var(--mat-sys-background);
     color: #fff;
-    border-radius: 8px;
-    border: 2px solid var(--mat-sys-outline);
-  }
+    border-radius: 0.5rem;
 
-  .mat-header-cell,
-  .mat-cell {
-    padding: 0.75rem 1rem;
-  }
+    .mat-mdc-header-row,
+    .mat-header-row {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--mat-sys-surface-variant);
+    }
 
-  .mat-header-row {
-    background: #23202a;
-  }
+    .mat-mdc-header-cell,
+    .mat-header-cell {
+      background: var(--mat-sys-surface-variant);
+      font-weight: 600;
+    }
 
-  .mat-row {
-    background: #18141a;
+    .mat-mdc-row,
+    .mat-row {
+      background: var(--mat-sys-surface);
+    }
+
+    .mat-mdc-cell,
+    .mat-cell {
+      padding: 0.75rem 1rem;
+    }
+
+    .mat-column-actions {
+      width: 10rem;
+    }
+
+    .mat-column-title,
+    .mat-column-id,
+    .mat-column-client {
+      text-overflow: ellipsis;
+    }
+
+    td {
+      &.mat-column-actions {
+        display: flex;
+        align-items: center;
+        justify-content: center
+      }
+    }
+
+    th {
+      &.mat-column-actions {
+        text-align: center;
+      }
+    }
+
+    .mat-mdc-row,
+    .mat-row {
+      background: var(--mat-sys-surface);
+      transition: background 0.2s;
+
+      &:hover {
+        background: var(--mat-sys-surface-variant);
+      }
+    }
+
+    .status-badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      display: inline-block;
+      min-width: 5rem;
+      text-align: center;
+
+      &.draft {
+        background: #e3f2fd;
+        color: #1565c0;
+      }
+
+      &.in_review {
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      &.approved {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      &.archived {
+        background: #eeeeee;
+        color: #616161;
+      }
+    }
   }
 
   .mat-button {

@@ -5,6 +5,7 @@ import { ThreeRenderService } from './three-render.service';
 import { calculatePolygonArea, findOrAddGlobalVertex, clearDrawingVertexHighlights, canonicalWallKey } from '../../utils/geometry-utils';
 import { WallFeature, WallSide, sideMap } from '../../models/room-feature.model';
 import { FurnitureService } from './furniture.service';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 @Injectable({
   providedIn: 'root'
@@ -195,6 +196,93 @@ export class RoomWallService {
           wallHeight
         };
 
+        const gltfLoader = new GLTFLoader();
+
+        for (const f of mergedFeatures) {
+          const isWindow = f.type === 'window';
+          const modelPath = isWindow
+            ? 'assets/3d_door_window/window.glb'
+            : 'assets/3d_door_window/door.glb';
+
+          gltfLoader.load(modelPath, (gltf) => {
+            const model = gltf.scene;
+
+            // Compute bounding box of model
+            const box = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+
+            // Feature dimensions
+            const featureWidth = f.width;
+            const featureHeight = f.height;
+            const featureDepth = wallThickness;
+
+            // Avoid division by zero
+            const safeSizeX = size.x || 1;
+            const safeSizeY = size.y || 1;
+
+            // For doors: scale by width and height only
+            let scale;
+            if (!isWindow) {
+              scale = Math.min(featureWidth / safeSizeX, featureHeight / safeSizeY);
+              model.scale.setScalar(scale);
+            } else {
+              // For windows: use previous uniform scaling
+              const scaleX = featureWidth / safeSizeX;
+              const scaleY = featureHeight / safeSizeY;
+              model.scale.set(scaleX, scaleY, scaleX); // Use scaleX for depth to maintain proportions
+            }
+
+            // Recompute bounding box after scaling
+            const scaledBox = new THREE.Box3().setFromObject(model);
+
+            // Position model at hole center, base aligned
+            const wallLength = length;
+            const xCenter = f.position * wallLength;
+            const baseHeight = isWindow ? 1 : 0;
+            const minY = scaledBox.min.y;
+            const yCenter = baseHeight - minY;
+            const zCenter = wallThickness / 2;
+
+            model.position.set(xCenter, yCenter, zCenter);
+
+            // For doors: rotate by 90° around Y to match wall orientation
+            if (!isWindow) {
+              model.rotation.y = Math.PI / 2;
+            } else {
+              // For windows: determine which side faces inward
+              // Compute wall direction and normal
+              const wallDir = new THREE.Vector3(dx, 0, dz).normalize();
+              const wallNormal = new THREE.Vector3(-dz, 0, dx).normalize(); // Perpendicular to wall
+
+              // Determine which room this feature belongs to
+              const featureListIndex = seg.features.findIndex(list => list.includes(f));
+              const roomIdx = seg.rooms[featureListIndex];
+              const roomVerts = allRooms[roomIdx].vertices;
+
+              // Compute room centroid
+              let cx = 0, cz = 0;
+              for (const v of roomVerts) {
+                cx += v.x;
+                cz += v.z;
+              }
+              cx /= roomVerts.length;
+              cz /= roomVerts.length;
+
+              // Vector from wall midpoint to room centroid
+              const wallMidX = (start.x + end.x) / 2;
+              const wallMidZ = (start.z + end.z) / 2;
+              const toRoom = new THREE.Vector3(cx - wallMidX, 0, cz - wallMidZ).normalize();
+
+              // If wall normal points away from room, flip window
+              const dot = wallNormal.dot(toRoom);
+              model.rotation.y = dot < 0 ? Math.PI : 0;
+            }
+
+            wallMesh.add(model);
+          });
+        }
+
         wallMeshes.push(wallMesh);
       }
     }
@@ -212,21 +300,29 @@ export class RoomWallService {
   // Room selection logic
   onRoomSelect(intersects: THREE.Intersection[], roomMeshes: THREE.Mesh[]) {
     if (intersects.length > 0) {
-      if (this.editorState.selectedRoomMesh) {
-        (this.editorState.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+      const prevIdx = this.editorState.selectedRoomIndex;
+      if (prevIdx !== -1) {
+        const prevMesh = this.editorState.roomMeshes[prevIdx];
+        (prevMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
       }
-      this.editorState.selectedRoomMesh = intersects[0].object as THREE.Mesh;
-      (this.editorState.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0xffff00);
+      const mesh = intersects[0].object as THREE.Mesh;
+      const idx = this.editorState.roomMeshes.indexOf(mesh);
+      if (idx !== -1) {
+        this.editorState.selectedRoomIndex = idx;
+        (mesh.material as THREE.MeshStandardMaterial).emissive.setHex(0xffff00);
+      }
     } else {
-      if (this.editorState.selectedRoomMesh) {
-        (this.editorState.selectedRoomMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
-        this.editorState.selectedRoomMesh = null;
+      const prevIdx = this.editorState.selectedRoomIndex;
+      if (prevIdx !== -1) {
+        const prevMesh = this.editorState.roomMeshes[prevIdx];
+        (prevMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
       }
+      this.editorState.selectedRoomIndex = -1;
     }
   }
 
   deleteSelectedRoom() {
-    const idx = this.editorState.roomMeshes.indexOf(this.editorState.selectedRoomMesh!);
+    const idx = this.editorState.selectedRoomIndex;
     if (idx === -1) return;
     // Remove mesh and walls from scene
     this.threeRender.scene.remove(this.editorState.roomMeshes[idx]);
@@ -245,7 +341,7 @@ export class RoomWallService {
     this.editorState.roomMeshes.splice(idx, 1);
     this.editorState.roomMetadata.splice(idx, 1);
     this.editorState.roomVertexIndices.splice(idx, 1);
-    this.editorState.selectedRoomMesh = null;
+    this.editorState.selectedRoomIndex = -1;
     this.regenerateAllWalls();
   }
 
@@ -311,6 +407,9 @@ export class RoomWallService {
 
     // Update area
     this.editorState.roomMetadata[roomIndex].area = calculatePolygonArea(verts);
+
+    // Notify metadata change
+    this.editorState.emitRoomMetadataChanged();
   }
 
   // Update all rooms that use a given global vertex index
@@ -346,7 +445,7 @@ export class RoomWallService {
     this.editorState.roomMetadata = [];
     this.editorState.globalVertices = [];
     this.editorState.roomVertexIndices = [];
-    this.editorState.selectedRoomMesh = null;
+    this.editorState.selectedRoomIndex = -1;
 
     // Restore from data
     this.editorState.globalVertices = data.globalVertices || [];
@@ -380,7 +479,7 @@ export class RoomWallService {
         if (appearance.color) mat.color = new THREE.Color(appearance.color);
         if (appearance.texture) {
           const texLoader = new THREE.TextureLoader();
-          const url = `assets/textures/${appearance.texture}.jpg`;
+          const url = `assets/textures/floors/${appearance.texture}.jpg`;
           const tex = texLoader.load(url);
           tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
           mat.map = tex;
@@ -484,7 +583,7 @@ export class RoomWallService {
         if (data.color) { mat.color = new THREE.Color(data.color); console.log(`Applied color ${data.color} to wall ${wallKey} side ${side}`); }
         if (data.texture) {
           const texLoader = new THREE.TextureLoader();
-          const url = `assets/textures/${data.texture}.jpg`;
+          const url = `assets/textures/walls/${data.texture}.jpg`;
           const tex = texLoader.load(url);
           tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
           mat.map = tex;
@@ -559,7 +658,7 @@ export class RoomWallService {
       mat.map = null;
     } else {
       const texLoader = new THREE.TextureLoader();
-      const url = `assets/textures/${textureId}.jpg`;
+      const url = `assets/textures/walls/${textureId}.jpg`;
       const tex = texLoader.load(url);
       tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
       mat.map = tex;
@@ -593,7 +692,7 @@ export class RoomWallService {
       mat.map = null;
     } else {
       const texLoader = new THREE.TextureLoader();
-      const url = `assets/textures/${textureId}.jpg`;
+      const url = `assets/textures/floors/${textureId}.jpg`;
       const tex = texLoader.load(
         url,
         () => console.log('Texture loaded:', url),

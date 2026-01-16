@@ -1,3 +1,70 @@
 .feedback-panel {
-  padding: 2rem;
+  padding: 2rem 1rem;
+  padding-top: 4rem;
+  height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  h2 {
+    margin-bottom: 1.5rem;
+  }
+
+  .loading,
+  .empty {
+    text-align: center;
+    padding: 3rem;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .feedback-table {
+    width: 100%;
+    background: var(--mat-sys-background);
+    color: #fff;
+    border-radius: 0.5rem;
+    border: 0.125rem solid var(--mat-sys-outline);
+  }
+
+  .mat-header-cell,
+  .mat-cell {
+    padding: 0.75rem 1rem;
+  }
+
+  .mat-header-row {
+    background: var(--mat-sys-surface-variant);
+  }
+
+  .message-cell {
+    max-width: 18.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+
+    &.pending {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    &.resolved {
+      background: #d4edda;
+      color: #155724;
+    }
+  }
+
+  .action-button {
+    &:hover {
+      .mat-icon {
+        fill: var(--mat-sys-primary);
+      }
+    }
+  }
 }

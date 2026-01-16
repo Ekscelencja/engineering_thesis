@@ -10,14 +10,19 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatStepperModule, MatStepper } from '@angular/material/stepper';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
-import * as THREE from 'three';
-import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
-import { StepperSelectionEvent } from '@angular/cdk/stepper';
 import { MatTableModule } from '@angular/material/table';
+import { MatDialog } from '@angular/material/dialog';
+import { MatSelectModule } from '@angular/material/select';
+import { FeedbackDialogComponent, FeedbackDialogData } from '../feedback/feedback-dialog/feedback-dialog';
+import { FeedbackViewDialogComponent } from '../feedback/feedback-view-dialog/feedback-view-dialog';
+import { NotificationService, Feedback } from '../services/api/notification.service';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { StepperSelectionEvent } from '@angular/cdk/stepper';
 import { ColorPickerComponent } from './color-picker/color-picker';
 import { AssetsService, FurnitureAsset } from '../services/api/assets.service';
 import { FurniturePreviewComponent } from '../furniture-preview/furniture-preview';
+import { Subscription } from 'rxjs';
 
 @Pipe({ name: 'numberToColor' })
 export class NumberToColorPipe implements PipeTransform {
@@ -40,18 +45,22 @@ export class NumberToColorPipe implements PipeTransform {
     MatInputModule,
     MatIconModule,
     MatTableModule,
+    MatSelectModule,
     NumberToColorPipe,
     ColorPickerComponent,
     FurniturePreviewComponent
   ]
 })
 export class EditorComponent implements AfterViewInit, OnDestroy {
+  public projectStatus: 'draft' | 'in_review' | 'approved' | 'archived' = 'draft';
   public wallColor: string = '';
   public wallTexture: string = '';
   public floorColor: string = '';
   public floorTexture: string = '';
   public furnitureAssets: FurnitureAsset[] = [];
   public placedFurniture: { asset: FurnitureAsset, position: THREE.Vector3, rotation: number }[] = [];
+  public wallTextures: { name: string, file: string, url: string }[] = [];
+  public floorTextures: { name: string, file: string, url: string }[] = [];
 
   wallFeatureRows = [
     { type: 'features', label: 'Wall Features', expanded: false },
@@ -59,6 +68,23 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     { type: 'wtexture', label: 'Wall Texture', expanded: false },
     { type: 'fcolor', label: 'Floor Color', expanded: false },
     { type: 'ftexture', label: 'Floor Texture', expanded: false }
+  ];
+
+  roomTypes = [
+    { key: 'living_room', label: 'Living Room' },
+    { key: 'bedroom', label: 'Bedroom' },
+    { key: 'bathroom', label: 'Bathroom' },
+    { key: 'kitchen', label: 'Kitchen' },
+    { key: 'hall', label: 'Hall' },
+    { key: 'corridor', label: 'Corridor' },
+    { key: 'dining_room', label: 'Dining Room' },
+    { key: 'office', label: 'Office' },
+    { key: 'study', label: 'Study' },
+    { key: 'storage', label: 'Storage' },
+    { key: 'utility_room', label: 'Utility Room' },
+    { key: 'laundry_room', label: 'Laundry Room' },
+    { key: 'closet', label: 'Closet' },
+    { key: 'walk_in_closet', label: 'Walk-in Closet' }
   ];
 
   @ViewChild('canvas', { static: true }) canvasRef!: ElementRef<HTMLCanvasElement>;
@@ -75,11 +101,25 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   @Input() projectData: Partial<ProjectData> | null = null;
   @Output() closeEditor = new EventEmitter<void>();
 
+  // Add these new inputs
+  @Input() feedbackMode: boolean = false;
+  @Input() viewOnly: boolean = false;
+
+  // Add feedback-related properties
+  private feedbackMarkers: THREE.Mesh[] = [];
+  private feedbackData: Feedback[] = [];
+
   private suppressStepperSelectionChange = false;
+
+  private roomMetadataSub?: Subscription;
+  private selectedRoomIndexSub?: Subscription;
+
+  private gltfLoader = new GLTFLoader();
 
   public get roomMetadata() {
     return this.editorStateService.roomMetadata;
   }
+
   public get selectedRoomMesh() {
     return this.editorStateService.selectedRoomMesh;
   }
@@ -90,6 +130,10 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   public get editorStep() {
     return this.editorStateService.editorStep;
+  }
+
+  public get canEdit(): boolean {
+    return !this.viewOnly && !this.feedbackMode;
   }
 
   public step1Completed = false;
@@ -108,18 +152,46 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     private roomWallService: RoomWallService,
     private projectService: ProjectService,
     public editorEventsService: EditorEventsService,
-    private assetsService: AssetsService
+    private assetsService: AssetsService,
+    private dialog: MatDialog,
+    private notificationService: NotificationService
   ) { }
+
+  ngOnInit() {
+    if (this.projectData?.status) {
+      this.projectStatus = this.projectData.status;
+    }
+    this.assetsService.getTextures('wall').subscribe(list => this.wallTextures = list);
+    this.assetsService.getTextures('floor').subscribe(list => this.floorTextures = list);
+  }
 
   ngAfterViewInit() {
     this.threeRenderService.init(this.canvasRef.nativeElement);
     this.threeRenderService.animate();
     this.editorEventsService.setCanvasRef(this.canvasRef);
 
+    this.editorStateService.feedbackMode = this.feedbackMode;
+    this.editorEventsService.viewOnly = this.viewOnly;
+    this.editorEventsService.feedbackMode = this.feedbackMode;
+
+    if (this.feedbackMode) {
+      this.editorEventsService.onFeedbackElementSelected = this.onElementSelectedForFeedback.bind(this);
+    }
+
+    this.editorEventsService.onFeedbackMarkerClicked = this.onFeedbackMarkerClicked.bind(this);
+
     window.addEventListener('resize', () => this.threeRenderService.resize(this.canvasRef.nativeElement));
 
     this.ngZone.runOutsideAngular(() => {
       this.editorEventsService.setCanvasListeners();
+    });
+
+    this.roomMetadataSub = this.editorStateService.roomMetadataChanged$.subscribe(() => {
+      this.cdr.detectChanges();
+    });
+
+    this.selectedRoomIndexSub = this.editorStateService.selectedRoomIndexChanged$.subscribe(() => {
+      this.cdr.detectChanges();
     });
   }
 
@@ -130,6 +202,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
           this.isNewProject = false;
           this.projectTitle = data.title;
           this.clientId = data.client;
+          this.projectStatus = data.status || 'draft';
 
           const step = ((data.editorStep || 1) as 1 | 2 | 3);
           this.editorStateService.editorStep = step;
@@ -155,9 +228,26 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
           } else {
             this.hydratePlacedFurnitureFromProject(data);
           }
+
+          // Load feedback markers after project loads
+          this.loadFeedbackMarkers();
         },
         error: (err) => alert('Load failed: ' + err.message)
       });
+    }
+
+    // Update feedback mode state when input changes
+    if (changes['feedbackMode']) {
+      this.editorStateService.feedbackMode = this.feedbackMode;
+      if (this.editorEventsService) {
+        this.editorEventsService.feedbackMode = this.feedbackMode;
+      }
+    }
+
+    if (changes['viewOnly']) {
+      if (this.editorEventsService) {
+        this.editorEventsService.viewOnly = this.viewOnly;
+      }
     }
   }
 
@@ -165,21 +255,29 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.threeRenderService.stopAnimation();
     if (this.threeRenderService.renderer) this.threeRenderService.renderer.dispose();
     this.editorEventsService.deleteCanvasListeners();
+    if (this.roomMetadataSub) {
+      this.roomMetadataSub.unsubscribe();
+    }
+    if (this.selectedRoomIndexSub) {
+      this.selectedRoomIndexSub.unsubscribe();
+    }
   }
 
   public saveProjectToServer() {
     const project: ProjectData = {
       title: this.isNewProject ? this.newProjectTitle! : this.projectTitle!,
       client: this.isNewProject ? this.newProjectClientId! : this.clientId!,
+      status: this.projectStatus,
       globalVertices: this.editorStateService.globalVertices,
       roomVertexIndices: this.editorStateService.roomVertexIndices,
       roomMetadata: this.editorStateService.roomMetadata,
       wallAppearance: this.editorStateService.wallAppearance,
       floorAppearance: this.editorStateService.floorAppearance,
       furniture: this.editorStateService.placedFurnitures.map(f => ({
-        assetId: f.asset.folder,
+        assetId: f.asset._id,
         position: { x: f.position.x, y: f.position.y, z: f.position.z },
-        rotation: f.rotation
+        rotation: f.rotation,
+        scale: f.scale
       })),
       editorStep: this.editorStateService.editorStep
     };
@@ -188,6 +286,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
         next: (saved) => (alert('Project saved! ID: ' + saved._id),
           this.projectId = saved._id!,
           this.clientId = saved.client!,
+          this.projectStatus = saved.status!,
           this.projectTitle = saved.title,
           this.isNewProject = false
         ),
@@ -199,6 +298,11 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
         error: (err) => alert('Update failed: ' + err.message)
       });
     }
+  }
+
+  onProjectStatusChange(newStatus: 'draft' | 'in_review' | 'approved' | 'archived') {
+    this.projectStatus = newStatus;
+    this.saveProjectToServer();
   }
 
   public exitEditor() {
@@ -293,12 +397,25 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.editorEventsService.initFeaturePreview();
   }
 
+  onRoomTypeChange(index: number, type: string) {
+    this.editorStateService.roomMetadata[index].type = type;
+  }
+
+  getRoomTypeLabel(key: string): string {
+    return this.roomTypes.find(rt => rt.key === key)?.label || 'Type: N/A';
+  }
+
   onWallColorPicked(ev: { hex: string; num: number }) {
     this.wallColor = ev.hex;
     const wall = this.editorStateService.selectedWall;
     const side = this.editorStateService.selectedWallSide;
     if (!wall || !side) return;
     this.roomWallService.applyWallColorToMesh(wall, this.wallColor, side);
+  }
+
+  selectWallTexture(tex: { name: string, file: string, url: string }) {
+    this.wallTexture = tex.name;
+    this.applyWallTexture();
   }
 
   applyWallTexture() {
@@ -317,6 +434,11 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.roomWallService.applyFloorColorToMesh(mesh, this.floorColor, roomKey);
   }
 
+  selectFloorTexture(tex: { name: string, file: string, url: string }) {
+    this.floorTexture = tex.name;
+    this.applyFloorTexture();
+  }
+
   applyFloorTexture() {
     const idx = this.selectedRoomIndex;
     if (idx < 0) return;
@@ -332,26 +454,18 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       this.editorEventsService.furniturePlacementActive = false;
     }
 
-    const basePath = `assets/3d_objects/${asset.folder}/`;
-    if (asset.mtl) {
-      const mtlLoader = new MTLLoader();
-      mtlLoader.setPath(basePath);
-      mtlLoader.load(asset.mtl, (materials) => {
-        materials.preload();
-        const objLoader = new OBJLoader();
-        objLoader.setMaterials(materials);
-        objLoader.setPath(basePath);
-        objLoader.load(asset.obj, (object) => {
-          this.preparePlacementModel(object, asset);
-        });
-      });
-    } else {
-      const objLoader = new OBJLoader();
-      objLoader.setPath(basePath);
-      objLoader.load(asset.obj, (object) => {
+    const url = `assets/${asset.folder}/${asset.glb}`;
+    this.gltfLoader.load(
+      url,
+      (gltf) => {
+        const object = gltf.scene;
         this.preparePlacementModel(object, asset);
-      });
-    }
+      },
+      undefined,
+      (error) => {
+        console.error(`Error loading furniture ${asset.name}:`, error);
+      }
+    );
   }
 
   private preparePlacementModel(object: THREE.Object3D, asset: FurnitureAsset) {
@@ -359,20 +473,16 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
-    const targetSize = 1.2;
-    object.scale.setScalar(asset.scale || 1);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    object.position.sub(center);
-    const newBox = new THREE.Box3().setFromObject(object);
-    object.position.y -= newBox.min.y;
+    const targetSize = 1;
+    const scale = targetSize / maxDim;
+    object.scale.setScalar(scale);
 
     this.threeRenderService.scene.add(object);
     this.editorEventsService.enableFurniturePlacement(object, asset);
   }
 
   private hydratePlacedFurnitureFromProject(data: ProjectData): void {
-    const list = (data as any)?.furniture as { assetId: string; position: { x: number; y: number; z: number }; rotation: number }[] | undefined;
+    const list = (data as any)?.furniture as { assetId: string; position: { x: number; y: number; z: number }; rotation: number; scale?: number }[] | undefined;
     if (!list || list.length === 0) {
       this.editorStateService.placedFurnitures = [];
       return;
@@ -381,39 +491,136 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.editorStateService.placedFurnitures = [];
 
     for (const f of list) {
-      const asset = this.furnitureAssets.find(a => a.folder === f.assetId);
+      const asset = this.furnitureAssets.find(a => a._id === f.assetId);
       if (!asset) continue;
 
-      const basePath = `assets/3d_objects/${asset.folder}/`;
-      const addFurniture = (object: THREE.Object3D) => {
-        object.position.set(f.position.x, f.position.y, f.position.z);
-        object.rotation.y = f.rotation ?? 0;
-        object.scale.setScalar(asset.scale || 1);
-        this.threeRenderService.scene.add(object);
+      const url = `assets/${asset.folder}/${asset.glb}`;
+      this.gltfLoader.load(
+        url,
+        (gltf) => {
+          const object = gltf.scene;
+          object.scale.setScalar(f.scale ?? 1);
 
-        this.editorStateService.placedFurnitures.push({
-          asset,
-          position: object.position.clone(),
-          rotation: object.rotation.y,
-          mesh: object
-        });
-      };
+          object.position.set(f.position.x, f.position.y, f.position.z);
+          object.rotation.y = f.rotation ?? 0;
+          this.threeRenderService.scene.add(object);
 
-      if (asset.mtl) {
-        const mtlLoader = new MTLLoader();
-        mtlLoader.setPath(basePath);
-        mtlLoader.load(asset.mtl, (materials) => {
-          materials.preload();
-          const objLoader = new OBJLoader();
-          objLoader.setMaterials(materials);
-          objLoader.setPath(basePath);
-          objLoader.load(asset.obj, addFurniture);
-        });
-      } else {
-        const objLoader = new OBJLoader();
-        objLoader.setPath(basePath);
-        objLoader.load(asset.obj, addFurniture);
-      }
+          this.editorStateService.placedFurnitures.push({
+            asset,
+            position: object.position.clone(),
+            rotation: object.rotation.y,
+            mesh: object,
+            scale: f.scale ?? 1
+          });
+        },
+        undefined,
+        (error) => {
+          console.error(`Error loading furniture ${asset.name}:`, error);
+        }
+      );
     }
+  }
+
+  loadFeedbackMarkers(): void {
+    if (!this.projectId) return;
+
+    this.notificationService.getFeedbackByProject(this.projectId).subscribe({
+      next: (feedbacks) => {
+        this.feedbackData = feedbacks;
+        this.clearFeedbackMarkers();
+
+        feedbacks.filter(f => f.status === 'pending').forEach(feedback => {
+          this.createFeedbackMarker(feedback);
+        });
+      },
+      error: (err) => console.error('Failed to load feedback:', err)
+    });
+  }
+
+  private createFeedbackMarker(feedback: Feedback): void {
+    const geometry = new THREE.SphereGeometry(0.15, 16, 16);
+    const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const marker = new THREE.Mesh(geometry, material);
+
+    marker.position.set(
+      feedback.position.x,
+      feedback.position.y + 0.5,
+      feedback.position.z
+    );
+    marker.userData['feedbackId'] = feedback._id;
+    marker.userData['isFeedbackMarker'] = true;
+
+    this.threeRenderService.scene.add(marker);
+    this.feedbackMarkers.push(marker);
+    this.editorStateService.feedbackMarkers.push(marker);
+  }
+
+  private clearFeedbackMarkers(): void {
+    this.feedbackMarkers.forEach(marker => {
+      this.threeRenderService.scene.remove(marker);
+      marker.geometry.dispose();
+      (marker.material as THREE.Material).dispose();
+    });
+    this.feedbackMarkers = [];
+    this.editorStateService.feedbackMarkers = [];
+  }
+
+  onElementSelectedForFeedback(
+    elementType: 'room' | 'wall' | 'furniture',
+    elementId: string,
+    position: THREE.Vector3
+  ): void {
+    if (!this.feedbackMode || !this.projectId) return;
+
+    const dialogData: FeedbackDialogData = {
+      elementType,
+      elementId,
+      position: { x: position.x, y: position.y, z: position.z }
+    };
+
+    const dialogRef = this.dialog.open(FeedbackDialogComponent, {
+      width: '400px',
+      data: dialogData
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.message) {
+        this.notificationService.createFeedback({
+          projectId: this.projectId!,
+          elementType,
+          elementId,
+          position: { x: position.x, y: position.y, z: position.z },
+          message: result.message
+        }).subscribe({
+          next: () => {
+            this.loadFeedbackMarkers();
+          },
+          error: (err) => console.error('Failed to create feedback:', err)
+        });
+      }
+    });
+  }
+
+  onFeedbackMarkerClicked(feedbackId: string): void {
+    const feedback = this.feedbackData.find(f => f._id === feedbackId);
+    if (!feedback) return;
+
+    const canResolve = this.userType === 'architect';
+
+    const dialogRef = this.dialog.open(FeedbackViewDialogComponent, {
+      width: '450px',
+      data: { feedback, canResolve }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.resolve) {
+        this.notificationService.resolveFeedback(feedbackId).subscribe({
+          next: () => {
+            this.loadFeedbackMarkers();
+          },
+          error: (err) => console.error('Failed to resolve feedback:', err)
+        });
+      }
+    });
   }
 }

@@ -5,68 +5,83 @@
 
   <div *ngIf="loading()">Loading projects...</div>
   <div *ngIf="error()">{{ error() }}</div>
+  <div class="projects-table-container" *ngIf="!loading() && !error() && projects().length && !showEditorOnly()">
+    <table mat-table [dataSource]="projects()" class="mat-elevation-z2 projects-table">
+      <!-- Title Column -->
+      <ng-container matColumnDef="title">
+        <th mat-header-cell *matHeaderCellDef>Title</th>
+        <td mat-cell *matCellDef="let project">{{ project.title }}</td>
+      </ng-container>
 
-  <table mat-table [dataSource]="projects()" *ngIf="!loading() && !error() && projects().length && !showEditorOnly()"
-    class="mat-elevation-z2 projects-table">
-    <!-- Title Column -->
-    <ng-container matColumnDef="title">
-      <th mat-header-cell *matHeaderCellDef>Title</th>
-      <td mat-cell *matCellDef="let project">{{ project.title }}</td>
-    </ng-container>
+      <!-- ID Column -->
+      <ng-container matColumnDef="id">
+        <th mat-header-cell *matHeaderCellDef>ID</th>
+        <td mat-cell *matCellDef="let project">{{ project._id }}</td>
+      </ng-container>
 
-    <!-- ID Column -->
-    <ng-container matColumnDef="id">
-      <th mat-header-cell *matHeaderCellDef>ID</th>
-      <td mat-cell *matCellDef="let project">{{ project._id }}</td>
-    </ng-container>
+      <!-- Client Column (only for architects) -->
+      <ng-container *ngIf="session.user()?.role === 'architect'" matColumnDef="client">
+        <th mat-header-cell *matHeaderCellDef>Client</th>
+        <td mat-cell *matCellDef="let project">{{ project.clientName || '-' }}</td>
+      </ng-container>
 
-    <!-- Client Column (only for architects) -->
-    <ng-container *ngIf="session.user()?.role === 'architect'" matColumnDef="client">
-      <th mat-header-cell *matHeaderCellDef>Client</th>
-      <td mat-cell *matCellDef="let project">{{ project.clientName || '-' }}</td>
-    </ng-container>
+      <!-- Status Column -->
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Status</th>
+        <td mat-cell *matCellDef="let project">
+          <span class="status-badge" [ngClass]="project.status">
+            {{ statusLabels[project.status] || project.status | titlecase }}
+          </span>
+        </td>
+      </ng-container>
 
-    <!-- Actions Column -->
-    <ng-container matColumnDef="actions">
-      <th mat-header-cell *matHeaderCellDef>Actions</th>
-      <td mat-cell *matCellDef="let project">
-        <ng-container *ngIf="userType === 'architect'">
-          <button mat-icon-button color="primary" (click)="editProject(project)" [matTooltip]="'Edit'"
-            class="action-button">
-            <mat-icon svgIcon="edit" aria-hidden="true" class="action-icon"></mat-icon>
-          </button>
-          <button mat-icon-button color="accent" (click)="archiveProject(project)" [matTooltip]="'Archive'"
-            class="action-button">
-            <mat-icon svgIcon="archive" aria-hidden="true" class="action-icon"></mat-icon>
-          </button>
-          <button mat-icon-button color="warn" (click)="deleteProject(project)" [matTooltip]="'Delete'"
-            class="action-button">
-            <mat-icon svgIcon="delete" aria-hidden="true" class="action-icon"></mat-icon>
-          </button>
-        </ng-container>
-        <ng-container *ngIf="userType === 'client'">
-          <button mat-icon-button color="primary" (click)="viewProject(project)" [matTooltip]="'View'"
-            class="action-button">
-            <mat-icon svgIcon="view" aria-hidden="true" class="action-icon"></mat-icon>
-          </button>
-          <button mat-icon-button color="accent" (click)="giveFeedback(project)" [matTooltip]="'Feedback'"
-            class="action-button">
-            <mat-icon svgIcon="feedback" aria-hidden="true" class="action-icon"></mat-icon>
-          </button>
-        </ng-container>
-      </td>
-    </ng-container>
+      <!-- Actions Column -->
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef>Actions</th>
+        <td mat-cell *matCellDef="let project">
+          <ng-container *ngIf="userType === 'architect'">
+            <button *ngIf="project.status === 'archived'" mat-icon-button color="primary" (click)="viewProject(project)" [matTooltip]="'View'"
+              class="action-button">
+              <mat-icon svgIcon="view" aria-hidden="true" class="action-icon"></mat-icon>
+            </button>
+            <button *ngIf="project.status !== 'archived'" mat-icon-button color="primary" (click)="editProject(project)" [matTooltip]="'Edit'"
+              class="action-button">
+              <mat-icon svgIcon="edit" aria-hidden="true" class="action-icon"></mat-icon>
+            </button>
+            <button *ngIf="project.status !== 'archived'" mat-icon-button color="accent" (click)="archiveProject(project)" [matTooltip]="'Archive'"
+              class="action-button">
+              <mat-icon svgIcon="archive" aria-hidden="true" class="action-icon"></mat-icon>
+            </button>
+            <button mat-icon-button (click)="deleteProject(project)" [matTooltip]="'Delete'"
+              class="action-button">
+              <mat-icon svgIcon="delete" aria-hidden="true" class="action-icon"></mat-icon>
+            </button>
+          </ng-container>
+          <ng-container *ngIf="userType === 'client'">
+            <button mat-icon-button color="primary" (click)="viewProject(project)" [matTooltip]="'View'"
+              class="action-button">
+              <mat-icon svgIcon="view" aria-hidden="true" class="action-icon"></mat-icon>
+            </button>
+            <button mat-icon-button color="accent" (click)="giveFeedback(project)" [matTooltip]="'Feedback'"
+              class="action-button">
+              <mat-icon svgIcon="feedback" aria-hidden="true" class="action-icon"></mat-icon>
+            </button>
+          </ng-container>
+        </td>
+      </ng-container>
 
-    <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-    <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-  </table>
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+  </div>
   <div *ngIf="!loading() && !error() && !projects().length && !showEditorOnly()">
     No projects found.
   </div>
 
-  <app-editor #editorRef *ngIf="showEditorOnly()" [projectId]="selectedProjectId" [newProjectTitle]="newProjectTitle"
-    [newProjectClientId]="newProjectClientId" [userType]="userType" (closeEditor)="showEditorOnly.set(false)">
-  </app-editor>
+  <app-editor *ngIf="showEditorOnly()" #editorRef [projectId]="selectedProjectId" [newProjectTitle]="newProjectTitle"
+    [newProjectClientId]="newProjectClientId" [userType]="userType" [feedbackMode]="feedbackMode"
+    [viewOnly]="userType === 'client' && !feedbackMode"
+    (closeEditor)="showEditorOnly.set(false); feedbackMode = false; selectedProjectId = null; fetchProjects()"></app-editor>
 
   <!-- Confirmation Dialog Template -->
   <ng-template #confirmDialog>
