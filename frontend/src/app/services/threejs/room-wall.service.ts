@@ -5,6 +5,7 @@ import { ThreeRenderService } from './three-render.service';
 import { calculatePolygonArea, findOrAddGlobalVertex, clearDrawingVertexHighlights, canonicalWallKey } from '../../utils/geometry-utils';
 import { WallFeature, WallSide, sideMap } from '../../models/room-feature.model';
 import { FurnitureService } from './furniture.service';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 @Injectable({
   providedIn: 'root'
@@ -195,6 +196,93 @@ export class RoomWallService {
           wallHeight
         };
 
+        const gltfLoader = new GLTFLoader();
+
+        for (const f of mergedFeatures) {
+          const isWindow = f.type === 'window';
+          const modelPath = isWindow
+            ? 'assets/3d_door_window/window.glb'
+            : 'assets/3d_door_window/door.glb';
+
+          gltfLoader.load(modelPath, (gltf) => {
+            const model = gltf.scene;
+
+            // Compute bounding box of model
+            const box = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+
+            // Feature dimensions
+            const featureWidth = f.width;
+            const featureHeight = f.height;
+            const featureDepth = wallThickness;
+
+            // Avoid division by zero
+            const safeSizeX = size.x || 1;
+            const safeSizeY = size.y || 1;
+
+            // For doors: scale by width and height only
+            let scale;
+            if (!isWindow) {
+              scale = Math.min(featureWidth / safeSizeX, featureHeight / safeSizeY);
+              model.scale.setScalar(scale);
+            } else {
+              // For windows: use previous uniform scaling
+              const scaleX = featureWidth / safeSizeX;
+              const scaleY = featureHeight / safeSizeY;
+              model.scale.set(scaleX, scaleY, scaleX); // Use scaleX for depth to maintain proportions
+            }
+
+            // Recompute bounding box after scaling
+            const scaledBox = new THREE.Box3().setFromObject(model);
+
+            // Position model at hole center, base aligned
+            const wallLength = length;
+            const xCenter = f.position * wallLength;
+            const baseHeight = isWindow ? 1 : 0;
+            const minY = scaledBox.min.y;
+            const yCenter = baseHeight - minY;
+            const zCenter = wallThickness / 2;
+
+            model.position.set(xCenter, yCenter, zCenter);
+
+            // For doors: rotate by 90° around Y to match wall orientation
+            if (!isWindow) {
+              model.rotation.y = Math.PI / 2;
+            } else {
+              // For windows: determine which side faces inward
+              // Compute wall direction and normal
+              const wallDir = new THREE.Vector3(dx, 0, dz).normalize();
+              const wallNormal = new THREE.Vector3(-dz, 0, dx).normalize(); // Perpendicular to wall
+
+              // Determine which room this feature belongs to
+              const featureListIndex = seg.features.findIndex(list => list.includes(f));
+              const roomIdx = seg.rooms[featureListIndex];
+              const roomVerts = allRooms[roomIdx].vertices;
+
+              // Compute room centroid
+              let cx = 0, cz = 0;
+              for (const v of roomVerts) {
+                cx += v.x;
+                cz += v.z;
+              }
+              cx /= roomVerts.length;
+              cz /= roomVerts.length;
+
+              // Vector from wall midpoint to room centroid
+              const wallMidX = (start.x + end.x) / 2;
+              const wallMidZ = (start.z + end.z) / 2;
+              const toRoom = new THREE.Vector3(cx - wallMidX, 0, cz - wallMidZ).normalize();
+
+              // If wall normal points away from room, flip window
+              const dot = wallNormal.dot(toRoom);
+              model.rotation.y = dot < 0 ? Math.PI : 0;
+            }
+
+            wallMesh.add(model);
+          });
+        }
+
         wallMeshes.push(wallMesh);
       }
     }
@@ -319,7 +407,7 @@ export class RoomWallService {
 
     // Update area
     this.editorState.roomMetadata[roomIndex].area = calculatePolygonArea(verts);
-    
+
     // Notify metadata change
     this.editorState.emitRoomMetadataChanged();
   }

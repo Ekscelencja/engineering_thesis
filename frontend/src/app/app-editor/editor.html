@@ -1,6 +1,6 @@
 <canvas #canvas class="three-canvas"></canvas>
 
-<div class="status-title-wrapper">
+<div class="status-title-wrapper" [class.no-edit]="!canEdit">
 	<h1 class="editor-project-name">{{ projectTitle }}</h1>
 	<mat-form-field appearance="fill" class="project-status-dropdown" *ngIf="canEdit">
 		<mat-label>Project Status</mat-label>
