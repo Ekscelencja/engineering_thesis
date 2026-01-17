@@ -1,6 +1,6 @@
 # Engineering Thesis 
 
-This repository contains the source code for my engineering thesis project. The project focuses on 3D visualization using Three.js and Angular on frontend, and Node.js and express on backend.
+This repository contains the source code for my engineering thesis project. The project focuses on creating 3D visualization for interior design using Three.js and Angular on frontend, and Node.js and express on backend.
 
 ## Project Structure
 - `frontend/`: Contains the Angular application for 3D visualization.
