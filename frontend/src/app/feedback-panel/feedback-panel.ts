@@ -40,7 +40,6 @@ export class FeedbackPanelComponent implements OnInit {
     this.loading.set(true);
     this.notificationService.getMyFeedback().subscribe({
       next: (feedbacks) => {
-        console.log('Loaded feedback:', feedbacks);
         this.feedbacks = feedbacks;
         this.loading.set(false);
       },

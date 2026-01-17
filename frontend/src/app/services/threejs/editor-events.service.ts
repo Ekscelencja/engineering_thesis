@@ -48,10 +48,17 @@ export class EditorEventsService {
     private roomWallService: RoomWallService
   ) { }
 
+  /**
+   * Set the canvas reference for event handling.
+   * @param canvasRef 
+   */
   setCanvasRef(canvasRef: { nativeElement: HTMLCanvasElement }) {
     this.canvasRef = canvasRef;
   }
 
+  /**
+   * Set up canvas event listeners based on the current editor state.
+   */
   setCanvasListeners() {
     this.deleteCanvasListeners();
 
@@ -88,6 +95,9 @@ export class EditorEventsService {
     window.addEventListener('keypress', this.onKeyPress);
   }
 
+  /**
+   * Remove all canvas event listeners.
+   */
   deleteCanvasListeners() {
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onPointerDown);
     this.canvasRef.nativeElement.removeEventListener('pointerdown', this.onRoomSelect);
@@ -105,6 +115,10 @@ export class EditorEventsService {
     window.removeEventListener('pointerup', this.onHandlePointerUp);
   }
 
+  /**
+   * Handle key down events for editor controls.
+   * @param event Keydown event
+   */
   onKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Control') {
       this.editorStateService.ctrlPressed = true;
@@ -122,6 +136,10 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Handle key up events for editor controls.
+   * @param event Keyup event
+   */
   onKeyUp = (event: KeyboardEvent) => {
     if (event.key === 'Control') {
       this.editorStateService.ctrlPressed = false;
@@ -129,6 +147,10 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Handle key press events for toggling modes.
+   * @param event Keypress event
+   */
   onKeyPress = (event: KeyboardEvent) => {
     if (event.key === 'd' || event.key === 'D') {
       this.editorStateService.meshDrawingActive = !this.editorStateService.meshDrawingActive;
@@ -162,6 +184,10 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Handle pointer down events for drawing mode.
+   * @param event PointerEvent triggered on pointer down.
+   */
   onPointerDown = (event: PointerEvent) => {
     if (this.editorStateService.ctrlPressed || !this.editorStateService.meshDrawingActive) return;
 
@@ -208,6 +234,10 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Handle pointer down events for vertex handle dragging.
+   * @param event PointerEvent triggered on pointer down.
+   */
   onHandlePointerDown = (event: PointerEvent) => {
     if (!this.editorStateService.editMode) return;
     const rect = this.canvasRef.nativeElement.getBoundingClientRect();
@@ -226,6 +256,10 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Handle pointer move events for vertex handle dragging.
+   * @param event PointerEvent triggered on pointer move.
+   */
   onHandlePointerMove = (event: PointerEvent) => {
     if (
       !this.editorStateService.editMode ||
@@ -252,13 +286,20 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Handle pointer up events to stop vertex handle dragging.
+   * @param event PointerEvent triggered on pointer up.
+   */
   onHandlePointerUp = (_event: PointerEvent) => {
     if (!this.editorStateService.editMode) return;
     this.editorStateService.draggingHandleIndex = null;
   };
 
+  /**   
+   * Handle room selection on pointer down.
+   * @param event PointerEvent triggered on pointer down.
+   */
   onRoomSelect = (event: PointerEvent) => {
-    console.log('[onRoomSelect] called, placingFeatureType:', this.editorStateService.placingFeatureType);
     if (
       this.editorStateService.ctrlPressed ||
       this.editorStateService.meshDrawingActive ||
@@ -276,6 +317,10 @@ export class EditorEventsService {
     });
   };
 
+  /**   
+   * Select and highlight the given wall mesh.
+   * @param wall The wall mesh to select.
+   */
   selectWall(wall: THREE.Mesh | null) {
     if (this.editorStateService.selectedWall) {
       const prev = this.editorStateService.selectedWall;
@@ -300,6 +345,10 @@ export class EditorEventsService {
     }
   }
 
+  /**
+   * Handle canvas click events for wall selection and feature placement.
+   * @param event MouseEvent triggered on canvas click.
+   */ 
   handleWallClick(event: MouseEvent) {
     const canvas = this.canvasRef.nativeElement;
     const mouse = new THREE.Vector2(
@@ -354,13 +403,11 @@ export class EditorEventsService {
         return;
       }
 
-      // After raycasting and finding the wall mesh:
       const face = intersects[0].face;
       const sideIndex = face && face.materialIndex !== undefined ? face.materialIndex : 0;
       const sideMap = ['front', 'back', 'side', 'top', 'bottom', 'hole'] as const;
       const side = sideMap[sideIndex] as WallSide;
 
-      // Store in state
       this.editorStateService.selectedWall = mesh;
       this.editorStateService.selectedWallSide = side;
 
@@ -370,10 +417,16 @@ export class EditorEventsService {
     }
   }
 
+  /**
+   * Initialize feature placement preview.
+   */
   initFeaturePreview() {
     this.canvasRef.nativeElement.addEventListener('pointermove', this.onPointerMovePreview);
   }
 
+  /**
+   * Dispose of the feature placement preview.
+   */
   disposeFeaturePreview() {
     this.canvasRef.nativeElement.removeEventListener('pointermove', this.onPointerMovePreview);
     if (this.previewMesh) {
@@ -384,6 +437,10 @@ export class EditorEventsService {
     }
   }
 
+  /**
+   * Handle pointer move events for feature placement preview.
+   * @param event PointerEvent triggered on pointer move.
+   */
   onPointerMovePreview = (event: PointerEvent) => {
     if (!this.editorStateService.placingFeatureType) return;
 
@@ -437,6 +494,11 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Enable furniture placement mode.
+   * @param placingFurnitureModel 
+   * @param placingFurnitureAsset 
+   */
   enableFurniturePlacement(
     placingFurnitureModel: THREE.Object3D,
     placingFurnitureAsset: FurnitureAsset
@@ -449,6 +511,9 @@ export class EditorEventsService {
     window.addEventListener('wheel', this.onFurniturePlacementWheel, { passive: false });
   }
 
+  /**
+   * Disable furniture placement mode.
+   */
   disableFurniturePlacement() {
     this.furniturePlacementActive = false;
     this.placingFurnitureModel = null;
@@ -456,6 +521,10 @@ export class EditorEventsService {
     window.removeEventListener('wheel', this.onFurniturePlacementWheel);
   }
 
+  /**
+   * Handle key down events for furniture placement controls.
+   * @param event WheelEvent for scaling furniture during placement.
+   */
   onFurniturePlacementWheel = (event: WheelEvent) => {
     if (!this.furniturePlacementActive || !this.placingFurnitureModel) return;
     event.preventDefault();
@@ -464,6 +533,10 @@ export class EditorEventsService {
     this.placingFurnitureModel.scale.setScalar(this.placingFurnitureScale);
   };
 
+  /**
+   * Handle mouse move events for furniture placement preview.
+   * @param event MouseEvent triggered on mouse move.
+   */
   onCanvasMouseMove = (event: MouseEvent) => {
     if (this.furniturePlacementActive && this.placingFurnitureModel) {
       const canvas = this.canvasRef.nativeElement;
@@ -487,15 +560,12 @@ export class EditorEventsService {
           }
         }
         if (insideAnyRoom) {
-          // --- Wall collision check ---
-          // Compute AABB of furniture at intended position
           const box = new THREE.Box3().setFromObject(this.placingFurnitureModel);
           const size = new THREE.Vector3();
           box.getSize(size);
           const min = { x: intersection.x + box.min.x, z: intersection.z + box.min.z };
           const max = { x: intersection.x + box.max.x, z: intersection.z + box.max.z };
           let collision = false;
-          // For each wall segment
           for (const indices of this.editorStateService.roomVertexIndices) {
             for (let i = 0; i < indices.length; i++) {
               const a = this.editorStateService.globalVertices[indices[i]];
@@ -508,7 +578,7 @@ export class EditorEventsService {
             if (collision) break;
           }
           if (!collision) {
-            const SNAP_DISTANCE = 0.3; // Adjust as needed
+            const SNAP_DISTANCE = 0.3;
 
             let snapWall: { a: { x: number, z: number }, b: { x: number, z: number }, dist: number, closest: { x: number, z: number } } | null = null;
 
@@ -516,7 +586,6 @@ export class EditorEventsService {
               for (let i = 0; i < indices.length; i++) {
                 const a = this.editorStateService.globalVertices[indices[i]];
                 const b = this.editorStateService.globalVertices[indices[(i + 1) % indices.length]];
-                // Closest point on wall to intended position
                 const wallVec = { x: b.x - a.x, z: b.z - a.z };
                 const wallLenSq = wallVec.x * wallVec.x + wallVec.z * wallVec.z;
                 let t = ((point.x - a.x) * wallVec.x + (point.z - a.z) * wallVec.z) / (wallLenSq || 1e-10);
@@ -530,54 +599,46 @@ export class EditorEventsService {
             }
 
             if (snapWall) {
-              // Snap position
               this.placingFurnitureModel.position.x = snapWall.closest.x;
               this.placingFurnitureModel.position.z = snapWall.closest.z;
 
-              // Snap rotation: make the back face the wall
               const dx = snapWall.b.x - snapWall.a.x;
               const dz = snapWall.b.z - snapWall.a.z;
               const wallAngle = Math.atan2(dz, dx);
-              // Furniture "back" is usually -Z, so rotate to face away from wall
               this.placingFurnitureModel.rotation.y = wallAngle + Math.PI / 2;
             } else {
-              // No snap: use original logic
               this.placingFurnitureModel.position.x = intersection.x;
               this.placingFurnitureModel.position.z = intersection.z;
             }
           }
-          // Optionally: else, show a warning/visual cue
         }
       }
     }
   };
 
+  /**
+   * Handle canvas click events for feedback selection and furniture placement.
+   * @param event MouseEvent triggered on canvas click.
+   */
   onCanvasClick = (event: MouseEvent) => {
-
-    // Handle feedback marker clicks first (for both feedback mode and normal mode)
     const feedbackMarker = this.checkFeedbackMarkerClick(event);
     if (feedbackMarker) {
       const feedbackId = feedbackMarker.userData['feedbackId'];
-      console.log('Feedback marker clicked:', feedbackId); // Add debug log
       if (this.onFeedbackMarkerClicked && feedbackId) {
-        console.log('Invoking onFeedbackMarkerClicked callback with ID:', feedbackId); // Add debug log
         this.onFeedbackMarkerClicked(feedbackId);
       }
       return;
     }
 
-    // Handle feedback element selection (client selecting an element to leave feedback)
     if (this.feedbackMode) {
       this.handleFeedbackSelection(event);
       return;
     }
 
-    // Block editing actions if view-only
     if (this.viewOnly) {
       return;
     }
 
-    // Existing furniture placement logic
     if (this.furniturePlacementActive && this.placingFurnitureModel && this.placingFurnitureAsset && this.editorStateService.editorStep === 3) {
       this.editorStateService.placedFurnitures.push({
         asset: this.placingFurnitureAsset,
@@ -590,7 +651,6 @@ export class EditorEventsService {
       return;
     }
 
-    // Existing step-based logic
     if (this.editorStateService.editorStep === 3) {
       this.selectFurnitureOnClick(event);
     } else if (this.editorStateService.editorStep === 2) {
@@ -598,6 +658,10 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Handle key down events for furniture placement adjustments.
+   * @param event KeyboardEvent triggered on key down.
+   */
   onFurniturePlacementKeyDown = (event: KeyboardEvent) => {
     if (!this.furniturePlacementActive || !this.placingFurnitureModel) return;
     let changed = false;
@@ -610,7 +674,7 @@ export class EditorEventsService {
     }
 
     const wallHeight = this.roomWallService.wallHeight ?? 3;
-    const step = 0.1; // movement step in meters
+    const step = 0.1;
 
     if (event.key === 'ArrowUp') {
       let newY = this.placingFurnitureModel.position.y + step;
@@ -629,6 +693,10 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Select furniture on canvas click.
+   * @param event MouseEvent triggered on canvas click.
+   */
   selectFurnitureOnClick = (event: MouseEvent) => {
     if (this.furniturePlacementActive) return;
 
@@ -639,7 +707,6 @@ export class EditorEventsService {
     );
     this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
 
-    // Build flat mesh array for raycasting
     const meshes: THREE.Mesh[] = [];
     for (const f of this.editorStateService.placedFurnitures) {
       f.mesh.traverse((child) => {
@@ -647,11 +714,7 @@ export class EditorEventsService {
       });
     }
     const intersects = this.raycaster.intersectObjects(meshes, false);
-    console.log('selectFurnitureOnClick called');
-    console.log('meshes:', meshes);
-    console.log('intersects:', intersects);
 
-    // Remove highlight from previous selection
     const prevIdx = this.editorStateService.selectedFurnitureIndex;
     if (prevIdx !== null && prevIdx >= 0) {
       const prevPf = this.editorStateService.placedFurnitures[prevIdx];
@@ -666,7 +729,6 @@ export class EditorEventsService {
 
     if (intersects.length > 0) {
       const mesh = intersects[0].object;
-      // Find which PlacedFurniture this mesh belongs to
       const pfIndex = this.editorStateService.placedFurnitures.findIndex(f => {
         let found = false;
         f.mesh.traverse(child => {
@@ -675,9 +737,7 @@ export class EditorEventsService {
         return found;
       });
       this.editorStateService.selectedFurnitureIndex = pfIndex;
-      console.log('[selectFurnitureOnClick] selectedFurnitureIndex:', pfIndex);
 
-      // Highlight all meshes in the group
       if (pfIndex !== -1) {
         const pf = this.editorStateService.placedFurnitures[pfIndex];
         pf.mesh.traverse(child => {
@@ -696,6 +756,10 @@ export class EditorEventsService {
     }
   };
 
+  /**
+   * Check if a feedback marker was clicked.
+   * @param event MouseEvent triggered on canvas click.
+   */
   private checkFeedbackMarkerClick(event: MouseEvent): THREE.Mesh | null {
     if (!this.canvasRef) return null;
 
@@ -718,6 +782,10 @@ export class EditorEventsService {
     return null;
   }
 
+  /**
+   * Handle feedback element selection on canvas click.
+   * @param event MouseEvent triggered on canvas click.
+   */
   private handleFeedbackSelection(event: MouseEvent): void {
     if (!this.canvasRef || !this.onFeedbackElementSelected) return;
 
@@ -729,7 +797,6 @@ export class EditorEventsService {
 
     this.raycaster.setFromCamera(mouse, this.threeRenderService.camera);
 
-    // Check furniture first
     const furnitureMeshes: THREE.Mesh[] = [];
     for (const f of this.editorStateService.placedFurnitures) {
       f.mesh.traverse((child) => {
@@ -742,7 +809,6 @@ export class EditorEventsService {
       const hitMesh = intersects[0].object;
       const point = intersects[0].point;
 
-      // Find which PlacedFurniture this mesh belongs to
       const furnitureIndex = this.editorStateService.placedFurnitures.findIndex(f => {
         let found = false;
         f.mesh.traverse(child => {
@@ -761,7 +827,6 @@ export class EditorEventsService {
       }
     }
 
-    // Check walls
     const wallMeshes = this.editorStateService.allWallMeshes.flat();
     intersects = this.raycaster.intersectObjects(wallMeshes, false);
     if (intersects.length > 0) {
@@ -775,7 +840,6 @@ export class EditorEventsService {
       return;
     }
 
-    // Check rooms (floors)
     const roomMeshes = this.editorStateService.roomMeshes;
     intersects = this.raycaster.intersectObjects(roomMeshes, false);
     if (intersects.length > 0) {

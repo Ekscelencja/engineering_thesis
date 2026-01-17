@@ -65,11 +65,9 @@ export class DashboardPanelComponent implements OnInit {
         .sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime())
         .slice(0, 5);
       this.cdr.detectChanges();
-      console.log('Recent feedback:', this.recentFeedback);
     });
 
     this.projectService.getProjects().subscribe((projects: any[]) => {
-      // Filter projects for current user
       let filteredProjects = projects;
       if (this.userRole === 'architect') {
         filteredProjects = projects.filter(p => p.architect?._id === userId);
@@ -82,7 +80,6 @@ export class DashboardPanelComponent implements OnInit {
         .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
         .slice(0, 5);
       this.cdr.detectChanges();
-      console.log('Recent projects:', this.recentProjects);
     });
   }
 

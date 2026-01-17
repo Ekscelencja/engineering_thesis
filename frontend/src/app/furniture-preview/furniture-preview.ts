@@ -22,7 +22,7 @@ export class FurniturePreviewComponent implements AfterViewInit, OnDestroy {
     ngAfterViewInit() {
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(45, 1.2, 0.1, 100);
-        this.camera.position.set(0, 2, 2.75); // Increased Z from 2 to 3 to zoom out
+        this.camera.position.set(0, 2, 2.75);
         this.camera.lookAt(0, 0.5, 0);
 
         this.renderer = new THREE.WebGLRenderer({ canvas: this.canvasRef.nativeElement, alpha: true, antialias: true });
@@ -34,7 +34,6 @@ export class FurniturePreviewComponent implements AfterViewInit, OnDestroy {
         this.scene.add(light);
         this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-        // Load GLB model
         const url = `assets/${this.asset.folder}/${this.asset.glb}`;
         this.gltfLoader.load(
             url,

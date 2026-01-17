@@ -10,6 +10,11 @@ export class FurnitureService {
 
     constructor(private assetsService: AssetsService) { }
 
+    /**
+     * Load furniture assets into the given Three.js scene.
+     * @param furnitureList List of furniture items to load with their positions, rotations, and scales.
+     * @param scene The Three.js scene to add the furniture to.
+     */
     loadFurnitureIntoScene(
         furnitureList: { assetId: string; position: { x: number; y: number; z: number }; rotation: number; scale?: number }[],
         scene: THREE.Scene

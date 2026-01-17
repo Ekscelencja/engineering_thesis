@@ -14,7 +14,6 @@ export class SessionService {
 
   setSession(token: string, user: any) {
     this.token.set(token);
-    // Remove password if present
     const { password, ...safeUser } = user;
     this.user.set(safeUser);
     localStorage.setItem('token', token);

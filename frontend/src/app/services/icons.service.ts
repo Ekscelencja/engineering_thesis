@@ -38,10 +38,7 @@ export class IconsService {
       );
     });
   }
-
-  /**
-   * Register a new icon at runtime (if needed)
-   */
+  
   registerIcon(name: string, path?: string) {
     this.iconRegistry.addSvgIcon(
       name,

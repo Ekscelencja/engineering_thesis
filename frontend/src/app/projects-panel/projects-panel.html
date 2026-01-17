@@ -1,5 +1,4 @@
 <div class="projects-panel">
-  <!-- Architect: Create Project Dialog Trigger -->
   <button *ngIf="userType === 'architect' && !showEditorOnly()" mat-flat-button class="create-project-button"
     (click)="openCreateProjectDialog()">Create New Project</button>
 
@@ -7,25 +6,21 @@
   <div *ngIf="error()">{{ error() }}</div>
   <div class="projects-table-container" *ngIf="!loading() && !error() && projects().length && !showEditorOnly()">
     <table mat-table [dataSource]="projects()" class="mat-elevation-z2 projects-table">
-      <!-- Title Column -->
       <ng-container matColumnDef="title">
         <th mat-header-cell *matHeaderCellDef>Title</th>
         <td mat-cell *matCellDef="let project">{{ project.title }}</td>
       </ng-container>
 
-      <!-- ID Column -->
       <ng-container matColumnDef="id">
         <th mat-header-cell *matHeaderCellDef>ID</th>
         <td mat-cell *matCellDef="let project">{{ project._id }}</td>
       </ng-container>
 
-      <!-- Client Column (only for architects) -->
       <ng-container *ngIf="session.user()?.role === 'architect'" matColumnDef="client">
         <th mat-header-cell *matHeaderCellDef>Client</th>
         <td mat-cell *matCellDef="let project">{{ project.clientName || '-' }}</td>
       </ng-container>
 
-      <!-- Status Column -->
       <ng-container matColumnDef="status">
         <th mat-header-cell *matHeaderCellDef>Status</th>
         <td mat-cell *matCellDef="let project">
@@ -35,7 +30,6 @@
         </td>
       </ng-container>
 
-      <!-- Actions Column -->
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef>Actions</th>
         <td mat-cell *matCellDef="let project">
@@ -83,7 +77,6 @@
     [viewOnly]="userType === 'client' && !feedbackMode"
     (closeEditor)="showEditorOnly.set(false); feedbackMode = false; selectedProjectId = null; fetchProjects()"></app-editor>
 
-  <!-- Confirmation Dialog Template -->
   <ng-template #confirmDialog>
     <h2 mat-dialog-title>{{ confirmDialogData?.title }}</h2>
     <div mat-dialog-content>
