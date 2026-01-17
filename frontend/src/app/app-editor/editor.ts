@@ -101,11 +101,9 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   @Input() projectData: Partial<ProjectData> | null = null;
   @Output() closeEditor = new EventEmitter<void>();
 
-  // Add these new inputs
   @Input() feedbackMode: boolean = false;
   @Input() viewOnly: boolean = false;
 
-  // Add feedback-related properties
   private feedbackMarkers: THREE.Mesh[] = [];
   private feedbackData: Feedback[] = [];
 
@@ -229,14 +227,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
             this.hydratePlacedFurnitureFromProject(data);
           }
 
-          // Load feedback markers after project loads
           this.loadFeedbackMarkers();
         },
         error: (err) => alert('Load failed: ' + err.message)
       });
     }
 
-    // Update feedback mode state when input changes
     if (changes['feedbackMode']) {
       this.editorStateService.feedbackMode = this.feedbackMode;
       if (this.editorEventsService) {

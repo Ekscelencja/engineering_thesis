@@ -68,7 +68,7 @@ export class EditorStateService {
   // Control state
   public ctrlPressed = false;
 
-  // Room/mesh arrays (optional: move here if you want all state in one place)
+  // Room/mesh arrays and related data
   public roomMeshes: THREE.Mesh[] = [];
   public allWallMeshes: THREE.Mesh[][] = [];
   public roomMetadata: RoomMetadata[] = [];

@@ -34,7 +34,6 @@ export class ProjectsPanelComponent implements OnInit {
   loading = signal<boolean>(true);
   error = signal<string | null>(null);
 
-  // Dialog-related state removed (handled in dialog)
   showEditorOnly = signal<boolean>(false);
   displayedColumns: string[] = [];
   icons = inject(IconsService);
@@ -100,8 +99,6 @@ export class ProjectsPanelComponent implements OnInit {
           clientName: p.client?.name || p.clientName || ''
         }));
 
-
-        // Filter projects for current architect or client
         if (user) {
           const userId = user.id;
           if (user.role === 'architect') {
@@ -139,7 +136,6 @@ export class ProjectsPanelComponent implements OnInit {
     });
   }
 
-  // (create/cancel logic now handled in dialog)
   editProject(project: ProjectData) {
     this.selectedProjectId = project._id || null;
     this.showEditorOnly.set(true);
@@ -210,21 +206,18 @@ export class ProjectsPanelComponent implements OnInit {
     });
   }
 
-  // Update viewProject method
   viewProject(project: ProjectData) {
     this.selectedProjectId = project._id || null;
     this.feedbackMode = false;
     this.showEditorOnly.set(true);
   }
 
-  // Update giveFeedback method
   giveFeedback(project: ProjectData) {
     this.selectedProjectId = project._id || null;
     this.feedbackMode = true;
     this.showEditorOnly.set(true);
   }
 
-  // Add method to close editor and reset state
   closeEditor() {
     this.showEditorOnly.set(false);
     this.feedbackMode = false;

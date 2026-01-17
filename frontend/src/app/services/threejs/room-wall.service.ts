@@ -289,7 +289,12 @@ export class RoomWallService {
     return wallMeshes;
   }
 
-  // Proof-of-concept: update features for a wall and re-render
+  /**
+   * Update wall features for a specific wall in a room and regenerate walls.
+   * @param roomIdx 
+   * @param wallIdx 
+   * @param features 
+   */
   updateWallFeatures(roomIdx: number, wallIdx: number, features: WallFeature[]) {
     const roomMeta = this.editorState.roomMetadata[roomIdx];
     if (!roomMeta.wallFeatures) roomMeta.wallFeatures = [];
@@ -297,7 +302,11 @@ export class RoomWallService {
     this.regenerateAllWalls();
   }
 
-  // Room selection logic
+  /**
+   * Regenerate all walls in the scene based on current editor state.
+   * @param intersects 
+   * @param roomMeshes 
+   */
   onRoomSelect(intersects: THREE.Intersection[], roomMeshes: THREE.Mesh[]) {
     if (intersects.length > 0) {
       const prevIdx = this.editorState.selectedRoomIndex;
@@ -321,6 +330,9 @@ export class RoomWallService {
     }
   }
 
+  /**
+   * Delete the currently selected room and its walls.
+   */ 
   deleteSelectedRoom() {
     const idx = this.editorState.selectedRoomIndex;
     if (idx === -1) return;
@@ -345,6 +357,10 @@ export class RoomWallService {
     this.regenerateAllWalls();
   }
 
+  /**
+   * Regenerate all walls in the scene based on current editor state.
+   * @param roomColor 
+   */  
   showVertexHandles(roomIndex: number) {
     this.hideVertexHandles();
     const indices = this.editorState.roomVertexIndices[roomIndex];
@@ -360,6 +376,9 @@ export class RoomWallService {
     }
   }
 
+  /**
+   * Hide and dispose all vertex handles.
+   */
   hideVertexHandles() {
     for (const handle of this.editorState.vertexHandles) {
       this.threeRender.scene.remove(handle);
@@ -369,6 +388,10 @@ export class RoomWallService {
     this.editorState.vertexHandles = [];
   }
 
+  /**
+   * Update the mesh and wall meshes for a specific room.
+   * @param roomIndex 
+   */
   updateRoomMeshAndWalls(roomIndex: number) {
     // --- Update only geometry, not mesh/material ---
     const mesh = this.editorState.roomMeshes[roomIndex];
@@ -412,16 +435,22 @@ export class RoomWallService {
     this.editorState.emitRoomMetadataChanged();
   }
 
-  // Update all rooms that use a given global vertex index
+  /**
+   * Update all rooms that use a specific global vertex index.
+   * @param globalVertexIdx 
+   */
   updateAllRoomsUsingVertex(globalVertexIdx: number) {
     for (let roomIdx = 0; roomIdx < this.editorState.roomVertexIndices.length; roomIdx++) {
       if (this.editorState.roomVertexIndices[roomIdx].includes(globalVertexIdx)) {
-        console.log(`Updating room ${roomIdx} due to vertex ${globalVertexIdx} change`);
         this.updateRoomMeshAndWalls(roomIdx);
       }
     }
   }
 
+  /**
+   * Rebuild the entire scene from imported data.
+   * @param data 
+   */
   rebuildFromData(data: any) {
     // Clear existing scene
     for (const mesh of this.editorState.roomMeshes) {
@@ -488,14 +517,14 @@ export class RoomWallService {
         mat.needsUpdate = true;
       }
     }
-    console.log('Restored rooms from imported data. editorStep=', this.editorState.editorStep);
     if (this.editorState.editorStep > 1) {
-      console.log('Regenerating walls after import');
       this.regenerateAllWalls();
     }
   }
 
-  // Handles completion of a polygon (room)
+  /**
+   * Finalize the currently drawn polygon as a room.
+   */
   closePolygon() {
     if (this.editorState.drawingVertices.length < 3) return;
 
@@ -539,7 +568,9 @@ export class RoomWallService {
     clearDrawingVertexHighlights(this.threeRender.scene, this.editorState.drawingVertexMeshes);
   }
 
-  // Helper to regenerate all deduplicated walls after any change
+  /**
+   * Regenerate all walls in the scene based on current editor state.
+   */
   regenerateAllWalls() {
     // Remove all current wall meshes from scene
     for (const wallArr of this.editorState.allWallMeshes) {
@@ -569,18 +600,15 @@ export class RoomWallService {
       this.threeRender.scene.add(wall);
     }
 
-    // --- PATCH: Apply saved wallAppearance by wallKey ---
+    // Apply saved wallAppearance by wallKey ---
     const wallAppearance = this.editorState.wallAppearance;
-    console.log('Restoring wall appearances from saved data:', wallAppearance);
     for (const [wallKey, appearance] of Object.entries(wallAppearance)) {
       const wall = newWallMeshes.find(w => w.userData['wallKey'] === wallKey);
       if (!wall) continue;
-      console.log(`Applying saved appearance to wall ${wallKey}`);
       for (const [side, data] of Object.entries(appearance)) {
-        console.log(`Restoring appearance for wall ${wallKey} side ${side}`);
         if (!sideMap.hasOwnProperty(side)) continue;
         const mat = (wall.material as THREE.Material[])[sideMap[side as WallSide]] as THREE.MeshStandardMaterial;
-        if (data.color) { mat.color = new THREE.Color(data.color); console.log(`Applied color ${data.color} to wall ${wallKey} side ${side}`); }
+        if (data.color) { mat.color = new THREE.Color(data.color); }
         if (data.texture) {
           const texLoader = new THREE.TextureLoader();
           const url = `assets/textures/walls/${data.texture}.jpg`;
@@ -593,6 +621,9 @@ export class RoomWallService {
     }
   }
 
+  /** 
+   * Hide all wall meshes from the scene.
+   */
   hideAllWalls() {
     for (const wallArr of this.editorState.allWallMeshes) {
       for (const wall of wallArr) {
@@ -601,6 +632,11 @@ export class RoomWallService {
     }
   }
 
+  /** 
+   * Remap wall UVs so that V coordinate goes from 0 to depth along Z axis.
+   * @param geometry
+   * @param wallThickness
+   */
   remapWallUVsZeroToDepth(geometry: THREE.ExtrudeGeometry, wallThickness: number) {
     const pos = geometry.getAttribute('position') as THREE.BufferAttribute;
     const uvArr = new Float32Array(pos.count * 2);
@@ -630,18 +666,27 @@ export class RoomWallService {
     geometry.attributes['uv'].needsUpdate = true;
   }
 
+  /**
+   * Get wall index in the allWallMeshes array by its mesh reference.
+   * @param wall 
+   * @returns 
+   */
   getWallIndexByMesh(wall: THREE.Mesh): number {
-    // If allWallMeshes is a flat array:
     const allWalls = this.editorState.allWallMeshes.flat();
     return allWalls.indexOf(wall);
   }
 
+  /** 
+   * Apply color to a specific wall mesh side and persist in editor state.
+   * @param wall
+   * @param colorHex
+   * @param side
+   */
   applyWallColorToMesh(wall: THREE.Mesh, colorHex: string, side: 'front' | 'back' | 'side' | 'top' | 'bottom' | 'hole') {
     const mat = (wall.material as THREE.Material[])[sideMap[side as WallSide]] as THREE.MeshStandardMaterial;
     mat.color = new THREE.Color(colorHex);
     mat.needsUpdate = true;
 
-    // Persist using wallKey instead of index
     const wallKey = wall.userData['wallKey'];
     if (wallKey) {
       if (!this.editorState.wallAppearance[wallKey]) this.editorState.wallAppearance[wallKey] = {};
@@ -652,6 +697,12 @@ export class RoomWallService {
     }
   }
 
+  /** 
+   * Apply texture to a specific wall mesh side and persist in editor state.
+   * @param wall
+   * @param textureId
+   * @param side
+   */
   applyWallTextureToMesh(wall: THREE.Mesh, textureId: string | null, side: 'front' | 'back' | 'side' | 'top' | 'bottom' | 'hole') {
     const mat = (wall.material as THREE.Material[])[sideMap[side as WallSide]] as THREE.MeshStandardMaterial;
     if (!textureId) {
@@ -665,7 +716,6 @@ export class RoomWallService {
     }
     mat.needsUpdate = true;
 
-    // Persist using wallKey instead of index
     const wallKey = wall.userData['wallKey'];
     if (wallKey) {
       if (!this.editorState.wallAppearance[wallKey]) this.editorState.wallAppearance[wallKey] = {};
@@ -676,6 +726,12 @@ export class RoomWallService {
     }
   }
 
+  /** 
+   * Apply color to a room floor mesh and persist in editor state.
+   * @param roomMesh
+   * @param colorHex
+   * @param roomKey
+   */
   applyFloorColorToMesh(roomMesh: THREE.Mesh, colorHex: string, roomKey: string) {
     const mat = roomMesh.material as THREE.MeshStandardMaterial;
     mat.color = new THREE.Color(colorHex);
@@ -686,6 +742,12 @@ export class RoomWallService {
     };
   }
 
+  /** 
+   * Apply texture to a room floor mesh and persist in editor state.
+   * @param roomMesh
+   * @param textureId
+   * @param roomKey
+   */ 
   applyFloorTextureToMesh(roomMesh: THREE.Mesh, textureId: string | null, roomKey: string) {
     const mat = roomMesh.material as THREE.MeshStandardMaterial;
     if (!textureId) {
@@ -695,7 +757,6 @@ export class RoomWallService {
       const url = `assets/textures/floors/${textureId}.jpg`;
       const tex = texLoader.load(
         url,
-        () => console.log('Texture loaded:', url),
         undefined,
         (err) => {
           console.error('Texture load error:', url, err);
@@ -713,6 +774,9 @@ export class RoomWallService {
     };
   }
 
+  /** 
+   * Delete the currently selected furniture item from the scene and editor state.
+   */
   deleteSelectedFurniture() {
     const idx = this.editorState.selectedFurnitureIndex;
     if (idx == null || idx < 0) return;
@@ -746,9 +810,6 @@ export class RoomWallService {
     // Remove from array and clear selection
     this.editorState.placedFurnitures.splice(idx, 1);
     this.editorState.selectedFurnitureIndex = null;
-
-    // Debug: print scene children
-    console.log('Scene children after deletion:', this.threeRender.scene.children);
 
     // Force a render update
     this.threeRender.renderer?.render(
