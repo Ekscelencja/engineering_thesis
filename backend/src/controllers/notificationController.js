@@ -12,7 +12,6 @@ exports.createFeedback = async (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    // Target user is the architect of the project
     const targetUser = project.architect;
 
     const notification = new Notification({

@@ -15,10 +15,4 @@ export class AuthService {
   login(credentials: any): Observable<any> {
     return this.http.post(`${this.apiUrl}/login`, credentials);
   }
-
-  getProfile(token: string): Observable<any> {
-    return this.http.get(`${this.apiUrl}/profile`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-  }
 }

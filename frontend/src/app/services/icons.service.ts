@@ -23,8 +23,7 @@ export class IconsService {
     'close',
     'chevron',
     'check',
-    'open_in_new',
-    // Add more icon names as needed (without .svg extension)
+    'open_in_new'
   ];
 
   constructor(private iconRegistry: MatIconRegistry, private sanitizer: DomSanitizer) {

@@ -24,10 +24,6 @@ Thumbs.db
 .env
 .env.*
 
-# Copilot history and temp files
-/copilot_history/*.tmp
-/copilot_history/*.bak
-
 # IDE files
 .vscode/
 *.code-workspace
@@ -35,14 +31,3 @@ Thumbs.db
 # Misc
 *.swp
 *.swo
-
-# Thesis and docs
-/docs/thesis/*.aux
-/docs/thesis/*.out
-/docs/thesis/*.toc
-/docs/thesis/*.log
-
-# Ignore generated session files if desired
-/copilot_history/*-session.md
-copilot_history/template.md
-docs/old-three-canvas.ts

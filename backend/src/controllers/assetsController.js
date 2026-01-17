@@ -1,8 +1,7 @@
-const FurnitureAsset = require('../models/FurnitureAsset');
-const TextureAsset = require('../models/TextureAsset'); 
 const fs = require('fs');
 const path = require('path');
 
+// Get furniture assets
 exports.getFurnitureAssets = (req, res) => {
   const assetsDir = path.join(__dirname, '../../../frontend/src/assets/3d_glb_models');
   
@@ -28,6 +27,7 @@ exports.getFurnitureAssets = (req, res) => {
   });
 };
 
+// Get texture assets (walls or floors)
 exports.getTextureAssets = (req, res) => {
   const type = req.query.type; // 'wall' or 'floor'
   const dir = path.join(__dirname, `../../../frontend/src/assets/textures/${type === 'floor' ? 'floors' : 'walls'}`);
