@@ -1,12 +1,6 @@
 const Project = require('../models/Project');
 const Notification = require('../models/Notification');
 
-// Helper to create notification
-async function createNotification({ user, type, message, project }) {
-  const notification = new Notification({ user, type, message, project });
-  await notification.save();
-}
-
 // Create a new project
 exports.createProject = async (req, res) => {
   try {
